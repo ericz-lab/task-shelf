@@ -98,8 +98,9 @@ export function buildRows(i: BuildInput): Row[] {
       name: t.name,
       description: job?.description ?? t.description ?? "",
       owner,
-      // An app without a page (no url), one that is gone, or ai-space's own work.
-      headless: owner === "system" || (owner === "app" && !info?.url),
+      // The owning app has no page (no url) or is gone. A backup task counts by its app's page;
+      // ai-space's own tasks have the ai-space panel.
+      headless: !mine && t.app !== "space" && !info?.url,
       machine: i.machine,
       schedule: t.schedule,
       zone,

@@ -152,6 +152,7 @@ describe("overview", () => {
       appTask("feed", "ingest", { state: { consecutiveErrors: 3, lastStatus: "error", lastError: "HTTP 502", lastRunAt: "2026-11-08T12:00:00.000Z", nextRunAt: "2026-11-08T13:05:00.000Z" } }),
       appTask("space", "backup-verify", { schedule: { kind: "cron", expr: "0 5 * * 1" } }),
       appTask("theme-watch", "backup"),
+      appTask("feed", "backup"),
     );
     space.apps = [{ name: "theme-watch", title: "Theme Watch", url: "https://theme-watch.example/", i18n: { zh: { title: "主题观察台" } } }, { name: "feed", title: "Feed" }];
     const rows = buildRows({ tasks: await space.listTasks(), apps: space.apps, jobs: shelf.list(), app: "task-shelf", machine: "box", machineZone: "America/Los_Angeles" });
@@ -159,10 +160,12 @@ describe("overview", () => {
     expect(by("task-shelf/nightly-export")).toMatchObject({ owner: "mine", headless: false, zone: ZONE, zoneDeclared: true, registered: true });
     expect(by("theme-watch/refresh")).toMatchObject({ owner: "app", headless: false, appTitle: { zh: "主题观察台", en: "Theme Watch" }, zone: "America/Los_Angeles", zoneDeclared: false });
     expect(by("feed/ingest")).toMatchObject({ owner: "app", headless: true, lastStatus: "error", consecutiveErrors: 3 });
-    expect(by("space/backup-verify")).toMatchObject({ owner: "system", headless: true });
-    expect(by("theme-watch/backup")).toMatchObject({ owner: "system" });
+    expect(by("space/backup-verify")).toMatchObject({ owner: "system", headless: false });
+    // A backup task has a page when the app it backs up has one.
+    expect(by("theme-watch/backup")).toMatchObject({ owner: "system", headless: false });
+    expect(by("feed/backup")).toMatchObject({ owner: "system", headless: true });
     expect(rows[0]!.owner).toBe("mine");
-    expect(countRows(rows)).toMatchObject({ total: 5, failing: 1, mine: 1, headless: 3 });
+    expect(countRows(rows)).toMatchObject({ total: 6, failing: 1, mine: 1, headless: 2 });
     expect(nextUp(rows)!.name).toBe("ingest");
   });
 
