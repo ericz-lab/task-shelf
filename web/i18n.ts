@@ -23,11 +23,10 @@ export const DICT: Record<string, { zh: string; en: string }> = {
   readOnlyBanner: { zh: "这个应用没有拿到 ai-space 的管理凭据：可以查看，不能修改任务。", en: "This app has no ai-space operator credential: tasks can be viewed, not changed." },
 
   tabsAria: { zh: "任务范围", en: "Task scope" },
-  tabMine: { zh: "我的任务", en: "My jobs" },
-  tabHeadless: { zh: "无界面", en: "No page" },
-  tabAll: { zh: "全部", en: "All" },
-  tabMineHint: { zh: "收纳在这里、由 ai-space 运行的任务", en: "Jobs kept here, run by ai-space" },
-  tabHeadlessHint: { zh: "所属应用没有自己页面的任务", en: "Tasks whose owner has no page" },
+  tabJobs: { zh: "任务", en: "Jobs" },
+  tabArchived: { zh: "已归档", en: "Archived" },
+  tabJobsHint: { zh: "收纳在这里、由 ai-space 运行的任务", en: "Jobs kept here, run by ai-space" },
+  tabArchivedHint: { zh: "删除后归档的任务，可以恢复", en: "Deleted jobs, kept and restorable" },
   filtersAria: { zh: "按状态筛选", en: "Filter by state" },
   fFailing: { zh: "失败", en: "Failing" },
   fPaused: { zh: "已暂停", en: "Paused" },
@@ -111,6 +110,7 @@ export const DICT: Record<string, { zh: string; en: string }> = {
 
   emptyMine: { zh: "还没有你自己的任务 — 新建一个，或让 AI 助手帮你建。", en: "No jobs of your own yet — create one, or ask the assistant." },
   emptyFilter: { zh: "没有符合条件的任务。", en: "No tasks match." },
+  emptyArchived: { zh: "没有归档的任务。", en: "No archived jobs." },
   errorList: { zh: "读不到 ai-space 的任务列表：{error}", en: "Cannot read ai-space's task list: {error}" },
   loading: { zh: "正在读取…", en: "Loading…" },
   retry: { zh: "重试", en: "Retry" },

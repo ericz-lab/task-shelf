@@ -3,14 +3,14 @@
 spec: 1
 name: task-shelf
 title: Task Shelf
-description: A home for small scheduled jobs that have no app of their own. It lists the scheduled tasks of this machine's apps (not ai-space's own tasks or backups), and lets you add, edit, pause, resume and run your own jobs by hand or by asking the AI assistant; ai-space's scheduler runs them.
+description: A home for small scheduled jobs that have no app of their own. You add, edit, pause, resume and run your jobs by hand or by asking the AI assistant; ai-space's scheduler runs them.
 icon: icon.svg
 url: /?lang={lang}
 status: active
 i18n:
   zh:
     title: 定时任务收纳
-    description: 收纳没有自己界面的零散定时任务。列出本机各应用的定时任务（不含 ai-space 自己的任务和备份）；自己的任务可以新建、修改、暂停、恢复、立即运行，可以手动，也可以交给 AI 助手；运行由 ai-space 的调度器负责。
+    description: 收纳没有自己界面的零散定时任务。只列出在这里新建的任务，可以新建、修改、暂停、恢复、立即运行，可以手动，也可以交给 AI 助手；运行由 ai-space 的调度器负责。
 
 # The app's own process. ai-space hands over PORT; the process binds 127.0.0.1 only.
 service:

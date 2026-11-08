@@ -1,5 +1,5 @@
 /**
- * The tasks page: the overview of every scheduled task on this machine, this app's jobs with their
+ * The tasks page: the jobs kept in this app with their
  * form, the detail of a selected row, and the assistant. State lives in the URL (?tab&f&q&sel&lang)
  * so a link reproduces the view. Times are shown in the browser's zone; schedules name their own.
  */
@@ -38,7 +38,7 @@ const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions(
 const params = new URLSearchParams(location.search);
 const S = {
   lang: (document.documentElement.lang.startsWith("zh") ? "zh" : "en") as Lang,
-  tab: (["mine", "headless", "all"].includes(params.get("tab") ?? "") ? params.get("tab") : "all") as "mine" | "headless" | "all",
+  tab: (params.get("tab") === "archived" ? "archived" : "jobs") as "jobs" | "archived",
   filter: (["failing", "paused", "running"].includes(params.get("f") ?? "") ? params.get("f") : null) as null | "failing" | "paused" | "running",
   q: params.get("q") ?? "",
   sel: params.get("sel"),
@@ -62,7 +62,7 @@ const locale = () => (S.lang === "zh" ? "zh-CN" : "en-US");
 
 function writeUrl() {
   const p = new URLSearchParams();
-  if (S.tab !== "all") p.set("tab", S.tab);
+  if (S.tab !== "jobs") p.set("tab", S.tab);
   if (S.filter) p.set("f", S.filter);
   if (S.q) p.set("q", S.q);
   if (S.sel) p.set("sel", S.sel);
@@ -151,9 +151,7 @@ function scheduleCell(r: Row): string {
 function visibleRows(): Row[] {
   const q = S.q.trim().toLowerCase();
   return S.rows.filter((r) => {
-    if (S.tab === "mine" && r.owner !== "mine") return false;
-    if (S.tab === "headless" && !r.headless) return false;
-    if (S.tab !== "mine" && r.archived) return false;
+    if ((S.tab === "archived") !== r.archived) return false;
     if (S.filter === "failing" && !((r.enabled && r.lastStatus === "error") || (!r.registered && !r.archived))) return false;
     if (S.filter === "paused" && r.enabled) return false;
     if (S.filter === "running" && !r.running) return false;
@@ -213,7 +211,8 @@ function renderSummary() {
 
 function renderTabs() {
   const c = S.counts;
-  const n = { mine: c?.mine ?? 0, headless: c?.headless ?? 0, all: c?.total ?? 0 };
+  void c;
+  const n = { jobs: S.rows.filter((r) => !r.archived).length, archived: S.rows.filter((r) => r.archived).length };
   for (const b of $$("[data-tab]")) {
     const k = b.dataset.tab as keyof typeof n;
     b.setAttribute("aria-pressed", String(S.tab === k));
@@ -237,7 +236,8 @@ function renderList() {
     state.innerHTML = `<p>${esc(t("errorList", { error: S.loadError || S.spaceError || "" }))}</p><button type="button" class="btn btn-sm" data-act="reload">${esc(t("retry"))}</button>`;
   } else if (!rows.length) {
     state.dataset.state = "empty";
-    state.innerHTML = `<p>${esc(S.tab === "mine" && !S.q && !S.filter ? t("emptyMine") : t("emptyFilter"))}</p>${S.tab === "mine" && S.writable ? `<button type="button" class="btn btn-sm btn-primary" data-act="new">${esc(t("newJob"))}</button>` : ""}`;
+    const plain = !S.q && !S.filter;
+    state.innerHTML = `<p>${esc(plain ? t(S.tab === "archived" ? "emptyArchived" : "emptyMine") : t("emptyFilter"))}</p>${S.tab === "jobs" && S.writable ? `<button type="button" class="btn btn-sm btn-primary" data-act="new">${esc(t("newJob"))}</button>` : ""}`;
   } else {
     state.dataset.state = "";
     state.innerHTML = "";
@@ -245,7 +245,7 @@ function renderList() {
   list.innerHTML = rows.map(rowHtml).join("");
   const foot = $("#list-foot");
   foot.hidden = !rows.length;
-  foot.textContent = t("shownOf", { n: rows.length, total: S.rows.filter((r) => !r.archived || S.tab === "mine").length });
+  foot.textContent = t("shownOf", { n: rows.length, total: S.rows.filter((r) => (S.tab === "archived") === r.archived).length });
 }
 
 // ---------------------------------------------------------------- detail

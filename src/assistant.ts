@@ -84,7 +84,7 @@ function rowLine(r: Row): string {
 export function systemPrompt(machine: string): string {
   return [
     "You are the assistant on the tasks page of Task Shelf (定时任务收纳), an ai-space app on the machine \"" + machine + "\".",
-    "Task Shelf keeps small scheduled jobs that have no app of their own. Each job is run by ai-space's scheduler on this machine. The page also lists every other scheduled task on this machine.",
+    "Task Shelf keeps small scheduled jobs that have no app of their own. Each job is run by ai-space's scheduler on this machine. The page shows only these jobs.",
     "",
     "Answer with exactly one JSON object and nothing else:",
     '{"reply": "<what you tell the person>", "actions": [{"tool": "<tool>", "args": {...}}]}',
@@ -95,7 +95,7 @@ export function systemPrompt(machine: string): string {
     "- pause_job {ref} | resume_job {ref} | run_job {ref} (run once now)",
     "- delete_job {ref}: archives the job (taken out of the schedule, kept and restorable). The page asks the person to confirm; you cannot confirm it.",
     "- restore_job {ref}",
-    "- get_runs {ref, limit?}: recent runs of a job, or of any task as \"app/name\". Its result comes back to you for another answer.",
+    "- get_runs {ref, limit?}: recent runs of a job. Its result comes back to you for another answer.",
     "ref is a job name of this app (or its number).",
     "schedule is one of:",
     '  {"kind":"cron","expr":"30 8 * * 1-5","tz":"America/Los_Angeles"}  (5 fields: minute hour day month weekday; weekday 0=Sunday)',
@@ -104,7 +104,7 @@ export function systemPrompt(machine: string): string {
     "name: lowercase letters, digits, . _ - ; derive a short one from the job when the person gives none.",
     "",
     "Rules:",
-    "- Only this app's jobs can be changed. Tasks of other apps and of ai-space are read-only here: say which app manages them; never act on them.",
+    "- Only this app's jobs exist here. Tasks of other apps and of ai-space are not shown and cannot be read or changed here: say that their own app or ai-space manages them.",
     "- Never invent a command, URL, request body or prompt. Use what the person wrote. If what to run or when is missing or unclear, ask a short question and return no actions.",
     "- Always give cron and one-time schedules a zone. When the person names none, use their zone given below.",
     "- Do only what was asked. One action per change; several jobs = several actions.",
@@ -123,16 +123,12 @@ function history(list: ChatMessage[]): string {
 
 export function userPrompt(o: { rows: Row[]; past: ChatMessage[]; message: string; zone: string; lang: Lang; now: number; results?: string[] }): string {
   const mine = o.rows.filter((r) => r.owner === "mine");
-  const others = o.rows.filter((r) => r.owner !== "mine" && !r.orphaned);
   return [
     `Now: ${zonedNow(o.now, o.zone)}`,
     `The person's zone: ${o.zone}. Page language: ${o.lang === "zh" ? "Chinese" : "English"}.`,
     "",
     "## Jobs of this app (you can change these)",
     mine.length ? mine.map(rowLine).join("\n") : "(none yet)",
-    "",
-    "## Other scheduled tasks on this machine (read-only)",
-    others.length ? others.map(rowLine).join("\n") : "(none)",
     "",
     "## Conversation so far",
     o.past.length ? history(o.past) : "(new conversation)",

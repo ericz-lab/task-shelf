@@ -66,7 +66,7 @@ describe("assistant actions", () => {
     expect(space.tasks.find((t) => t.app === "task-shelf")).toMatchObject({ name: "nightly-export", schedule: { kind: "cron", expr: "0 3 * * *", tz: ZONE } });
     expect(changesOf(db, 1).map((c) => c.actor)).toEqual(["assistant"]);
     expect(asked[0]!.tag).toBe("assistant");
-    expect(asked[0]!.prompt).toContain("theme-watch/refresh");
+    expect(asked[0]!.prompt).not.toContain("theme-watch/refresh");   // other apps' tasks are not shown
   });
 
   test("pause, resume, update and run; a failure shows on its chip", async () => {
@@ -118,12 +118,13 @@ describe("assistant actions", () => {
   });
 
   test("reading runs goes back to the model for the answer", async () => {
-    const { assistant, space, asked } = setup([
-      plan("我看一下。", [{ tool: "get_runs", args: { ref: "theme-watch/refresh", limit: 2 } }]),
+    const { assistant, shelf, space, asked } = setup([
+      plan("我看一下。", [{ tool: "get_runs", args: { ref: "ping", limit: 2 } }]),
       (req) => plan(req.prompt.includes("HTTP 502") ? "上一次失败了：HTTP 502。" : "没看到。"),
     ]);
-    space.runsOf.set("theme-watch-refresh", [{ id: 1, taskId: "theme-watch-refresh", startedAt: NOW - 60_000, endedAt: NOW - 50_000, status: "error", error: "HTTP 502", trigger: "schedule" }]);
-    const [, a] = await assistant.turn({ message: "theme-watch refresh 最近怎么样？", zone: ZONE, lang: "zh" });
+    const job = await shelf.create({ name: "ping", kind: "http", url: "https://example.test/ping", schedule: { kind: "every", every: "1h" } }, "page", ZONE);
+    space.runsOf.set(job.spaceTaskId!, [{ id: 1, taskId: job.spaceTaskId!, startedAt: NOW - 60_000, endedAt: NOW - 50_000, status: "error", error: "HTTP 502", trigger: "schedule" }]);
+    const [, a] = await assistant.turn({ message: "ping 最近怎么样？", zone: ZONE, lang: "zh" });
     expect(asked).toHaveLength(2);
     expect(a!.text).toBe("上一次失败了：HTTP 502。");
     expect(a!.actions.map((x) => x.tool)).toEqual(["get_runs"]);

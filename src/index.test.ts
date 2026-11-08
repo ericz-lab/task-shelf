@@ -29,8 +29,8 @@ describe("routes", () => {
     const { job } = (await res.json()) as { job: { id: number; schedule: { tz: string } } };
     expect(job.schedule.tz).toBe("Asia/Shanghai");
     const ov = (await (await fetch(`${base}/api/overview`)).json()) as { rows: { owner: string; name: string }[]; counts: { total: number; mine: number } };
-    expect(ov.counts).toMatchObject({ total: 2, mine: 1 });
-    expect(ov.rows.map((r) => `${r.owner}:${r.name}`)).toEqual(["mine:nightly", "app:refresh"]);
+    expect(ov.counts).toMatchObject({ total: 1, mine: 1 });   // theme-watch's task is not listed
+    expect(ov.rows.map((r) => `${r.owner}:${r.name}`)).toEqual(["mine:nightly"]);
     expect((await (await post(`/api/jobs/${job.id}/pause`, {})).json()) as object).toMatchObject({ ok: true, job: { enabled: false } });
     expect((await (await post(`/api/jobs/${job.id}/run`, {})).json()) as object).toMatchObject({ ok: true, started: true });
   });
@@ -58,9 +58,10 @@ describe("routes", () => {
     expect(r.messages[1]!.text).toContain("unavailable");
   });
 
-  test("runs of another app's task are readable", async () => {
+  test("another app's task is not listed and its runs are not reachable", async () => {
     space.runsOf.set("theme-watch-refresh", [{ id: 1, taskId: "theme-watch-refresh", startedAt: NOW - 1000, endedAt: NOW, status: "ok", trigger: "schedule" }]);
-    const r = (await (await fetch(`${base}/api/rows/theme-watch-refresh/runs`)).json()) as { runs: unknown[] };
-    expect(r.runs).toHaveLength(1);
+    const o = (await (await fetch(`${base}/api/overview`)).json()) as { rows: { app: string }[] };
+    expect(o.rows.some((r) => r.app === "theme-watch")).toBe(false);
+    expect((await fetch(`${base}/api/rows/theme-watch-refresh/runs`)).status).toBe(404);
   });
 });

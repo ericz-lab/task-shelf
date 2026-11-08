@@ -144,7 +144,7 @@ describe("job store", () => {
 });
 
 describe("overview", () => {
-  test("rows say who owns each task, whether it has a page and which zone it runs in; ai-space's own tasks are left out", async () => {
+  test("only this app's jobs are listed; other apps' tasks and ai-space's own are left out", async () => {
     const { shelf, space } = setup();
     await shelf.create(nightly, "page", ZONE);
     space.tasks.push(
@@ -158,16 +158,10 @@ describe("overview", () => {
     const rows = buildRows({ tasks: await space.listTasks(), apps: space.apps, jobs: shelf.list(), app: "task-shelf", machine: "box", machineZone: "America/Los_Angeles" });
     const by = (k: string) => rows.find((r) => `${r.app}/${r.name}` === k)!;
     expect(by("task-shelf/nightly-export")).toMatchObject({ owner: "mine", headless: false, zone: ZONE, zoneDeclared: true, registered: true });
-    expect(by("theme-watch/refresh")).toMatchObject({ owner: "app", headless: false, appTitle: { zh: "主题观察台", en: "Theme Watch" }, zone: "America/Los_Angeles", zoneDeclared: false });
-    expect(by("feed/ingest")).toMatchObject({ owner: "app", headless: true, lastStatus: "error", consecutiveErrors: 3 });
-    // ai-space's own tasks and every app's backup are not listed.
-    expect(by("space/backup-verify")).toBeUndefined();
-    expect(by("theme-watch/backup")).toBeUndefined();
-    expect(by("feed/backup")).toBeUndefined();
-    expect(rows.some((r) => r.owner === "system")).toBe(false);
-    expect(rows[0]!.owner).toBe("mine");
-    expect(countRows(rows)).toMatchObject({ total: 3, failing: 1, mine: 1, headless: 1 });
-    expect(nextUp(rows)!.name).toBe("ingest");
+    for (const k of ["theme-watch/refresh", "feed/ingest", "space/backup-verify", "theme-watch/backup", "feed/backup"]) expect(by(k)).toBeUndefined();
+    expect(rows.every((r) => r.owner === "mine")).toBe(true);
+    expect(countRows(rows)).toMatchObject({ total: 1, failing: 0, mine: 1, headless: 0 });
+    expect(nextUp(rows)!.name).toBe("nightly-export");
   });
 
   test("a job ai-space does not have shows as not registered", async () => {

@@ -3,11 +3,9 @@ import type { SpaceSchedule } from "./schedule.ts";
 import type { RunStatus, SpaceAppInfo, SpaceTask } from "./space.ts";
 
 /**
- * The overview: the scheduled tasks of this machine's apps, each labelled with who owns it.
- *   - mine: this app's own jobs (editable here);
- *   - app: tasks other apps declare in their space.yaml (read-only here; their app manages them).
- * Tasks ai-space adds itself (`space/*` and every app's `backup`) are left out: ai-space looks after them.
- * `system` stays in Owner for rows made before that; buildRows no longer produces it.
+ * The overview: only the jobs kept in this app. Tasks of other apps and ai-space's own tasks
+ * (`space/*`, every app's `backup`) are left out: their own app or ai-space looks after them.
+ * `app` and `system` stay in Owner for older rows; buildRows only produces `mine`.
  * `headless` marks a task whose owner has no page of its own, the ones easy to lose sight of.
  */
 
@@ -84,9 +82,9 @@ export function buildRows(i: BuildInput): Row[] {
     const mine = t.app === i.app && t.source === "api";
     const job = mine ? byTask.get(t.id) ?? i.jobs.find((j) => j.name === t.name && !j.archivedAt) : undefined;
     if (job) seenJobs.add(job.id);
-    // ai-space's own work (its tasks, every app's backup) is not shown.
-    if (!mine && (t.app === "space" || t.name === "backup")) continue;
-    const owner: Owner = mine ? "mine" : "app";
+    // Only this app's own jobs are shown.
+    if (!mine) continue;
+    const owner: Owner = "mine";
     const info = appInfo.get(t.app);
     const zh = info?.i18n?.zh?.title;
     const cronZone = t.schedule.kind === "cron" ? t.schedule.tz : undefined;
