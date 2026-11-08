@@ -3,10 +3,11 @@ import type { SpaceSchedule } from "./schedule.ts";
 import type { RunStatus, SpaceAppInfo, SpaceTask } from "./space.ts";
 
 /**
- * The overview: every scheduled task this machine's ai-space runs, each labelled with who owns it.
+ * The overview: the scheduled tasks of this machine's apps, each labelled with who owns it.
  *   - mine: this app's own jobs (editable here);
- *   - system: tasks ai-space contributes itself (`space/*`, every app's `backup`);
  *   - app: tasks other apps declare in their space.yaml (read-only here; their app manages them).
+ * Tasks ai-space adds itself (`space/*` and every app's `backup`) are left out: ai-space looks after them.
+ * `system` stays in Owner for rows made before that; buildRows no longer produces it.
  * `headless` marks a task whose owner has no page of its own, the ones easy to lose sight of.
  */
 
@@ -83,8 +84,9 @@ export function buildRows(i: BuildInput): Row[] {
     const mine = t.app === i.app && t.source === "api";
     const job = mine ? byTask.get(t.id) ?? i.jobs.find((j) => j.name === t.name && !j.archivedAt) : undefined;
     if (job) seenJobs.add(job.id);
-    const system = t.app === "space" || t.name === "backup";
-    const owner: Owner = mine ? "mine" : system ? "system" : "app";
+    // ai-space's own work (its tasks, every app's backup) is not shown.
+    if (!mine && (t.app === "space" || t.name === "backup")) continue;
+    const owner: Owner = mine ? "mine" : "app";
     const info = appInfo.get(t.app);
     const zh = info?.i18n?.zh?.title;
     const cronZone = t.schedule.kind === "cron" ? t.schedule.tz : undefined;
@@ -98,9 +100,8 @@ export function buildRows(i: BuildInput): Row[] {
       name: t.name,
       description: job?.description ?? t.description ?? "",
       owner,
-      // The owning app has no page (no url) or is gone. A backup task counts by its app's page;
-      // ai-space's own tasks have the ai-space panel.
-      headless: !mine && t.app !== "space" && !info?.url,
+      // The owning app has no page (no url) or is gone.
+      headless: !mine && !info?.url,
       machine: i.machine,
       schedule: t.schedule,
       zone,

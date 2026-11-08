@@ -3,12 +3,12 @@
 A home for small scheduled jobs that have no app of their own: a nightly export script, an hourly
 HTTP ping, a daily AI prompt. You keep them here; ai-space's scheduler runs them.
 
-The tasks page shows every scheduled task this machine's ai-space runs, in three views:
+The tasks page shows the scheduled tasks of this machine's apps, in three views. ai-space's own
+tasks (`space/*`) and every app's `backup` are left out: ai-space looks after them.
 
 - **我的任务 / My jobs**: the jobs you keep here. Add, edit, pause, resume, run now, delete (archive,
   restorable).
-- **无界面 / No page**: tasks whose owner has no page of its own (ai-space's own backups, apps
-  without a page). Read-only.
+- **无界面 / No page**: tasks whose app has no page of its own. Read-only.
 - **全部 / All**: everything, including tasks other apps declare in their `space.yaml`. Read-only:
   their own app manages them.
 

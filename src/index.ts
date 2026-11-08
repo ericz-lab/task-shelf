@@ -1,6 +1,6 @@
 /**
  * task-shelf: a home for small scheduled jobs that have no app of their own, and an overview of
- * every scheduled task this machine's ai-space runs. The jobs are stored here and run by ai-space's
+ * the scheduled tasks of this machine's apps (ai-space's own tasks and backups are left out). The jobs are stored here and run by ai-space's
  * scheduler as tasks of this app (src/jobs.ts); the tasks page has an assistant that manages them by
  * chat (src/assistant.ts). The service binds 127.0.0.1 only; ai-space hands over PORT, DATABASE_URL,
  * SPACE_API_URL, SPACE_NAME and the app token.
