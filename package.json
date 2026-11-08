@@ -1,0 +1,21 @@
+{
+  "name": "task-shelf",
+  "version": "0.1.0",
+  "description": "A home for small scheduled jobs that have no app of their own, run by the ai-space scheduler, with an overview of every scheduled task on the machine and an AI assistant that manages the jobs. An ai-space app.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun install && bun run typecheck && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "croner": "^10.0.1"
+  }
+}

@@ -1,0 +1,35 @@
+# ai-space app manifest. Contract: ai-space docs/app-spec.md (spec 1).
+
+spec: 1
+name: task-shelf
+title: Task Shelf
+description: A home for small scheduled jobs that have no app of their own. It lists every scheduled task this machine's ai-space runs, and lets you add, edit, pause, resume and run your own jobs by hand or by asking the AI assistant; ai-space's scheduler runs them.
+icon: icon.svg
+url: /?lang={lang}
+status: active
+i18n:
+  zh:
+    title: 定时任务收纳
+    description: 收纳没有自己界面的零散定时任务。列出本机 ai-space 正在调度的所有定时任务；自己的任务可以新建、修改、暂停、恢复、立即运行，可以手动，也可以交给 AI 助手；运行由 ai-space 的调度器负责。
+
+# The app's own process. ai-space hands over PORT; the process binds 127.0.0.1 only.
+service:
+  command: bun src/index.ts
+  port: 9145
+  health: /healthz
+  env:
+    NODE_ENV: "production"
+
+# The tasks page's assistant: one short structured call per turn (src/assistant.ts).
+model:
+  default: junior
+  tags:
+    assistant: junior
+
+storage:
+  database: sqlite
+  blobs: none
+
+# `space app deploy` (the post-receive hook) runs these after checkout; a failure keeps the running service.
+deploy:
+  check: [bun run typecheck, bun test]

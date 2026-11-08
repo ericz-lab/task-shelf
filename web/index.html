@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>定时任务收纳 · Task Shelf</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<!-- theme and language before first paint (ai-space docs/app-spec.md, App pages): ?theme= / ?lang= → stored → system -->
+<script>(function(){var d=document.documentElement;d.classList.add("js");var q=new URLSearchParams(location.search);var get=function(k){try{return localStorage.getItem(k)}catch(e){return null}};var t=q.get("theme")||get("task-shelf.theme");if(t==="light"||t==="dark")d.dataset.theme=t;d.dataset.mode=t==="light"||t==="dark"?t:"system";var l=q.get("lang")||get("task-shelf.lang")||((navigator.languages||[navigator.language]).find(function(x){return /^(zh|en)/i.test(x)})||"en");d.lang=/^zh/i.test(l)?"zh-CN":"en";})();</script>
+<link rel="stylesheet" href="./styles.css">
+<!-- ai-space usage heartbeat (docs/usage.md); added at runtime so Bun's HTML bundler leaves it alone -->
+<script>(function(){var s=document.createElement("script");s.src="/_space/usage.js";s.defer=true;document.head.appendChild(s)})()</script>
+<!-- ai-space feedback button (docs/feedback.md); shows only when the owner turned it on -->
+<script>(function(){var s=document.createElement("script");s.src="/_space/feedback.js";s.defer=true;document.head.appendChild(s)})()</script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-new" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1><span data-i18n="app">定时任务收纳</span><span class="alt" data-i18n="appAlt">Task Shelf</span></h1>
+      <p class="sum" id="sum" aria-live="polite"></p>
+    </div>
+    <div class="search" role="search">
+      <svg class="ic"><use href="#i-search"/></svg>
+      <label class="sr" for="q" data-i18n="searchAria">搜索任务</label>
+      <input id="q" type="search" placeholder="搜索任务、应用、命令" data-i18n-ph="search" autocomplete="off">
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <div class="tools">
+      <button type="button" class="btn btn-primary" data-act="new"><svg class="ic"><use href="#i-plus"/></svg><span data-i18n="newJob">新建任务</span></button>
+      <button type="button" class="btn as-toggle" data-act="as-open"><svg class="ic"><use href="#i-chat"/></svg><span data-i18n="assistantOpen">AI 助手</span></button>
+      <div class="seg seg-lang" role="group" aria-label="界面语言" data-i18n-aria="langAria">
+        <button type="button" data-lang="zh" aria-pressed="true" lang="zh">中</button>
+        <button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button>
+      </div>
+      <button type="button" class="btn btn-ghost btn-icon" id="theme" aria-label="主题：跟随系统，点按切换">
+        <svg class="ic th th-system"><use href="#i-auto"/></svg>
+        <svg class="ic th th-light"><use href="#i-sun"/></svg>
+        <svg class="ic th th-dark"><use href="#i-moon"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <p class="banner" id="ro-banner" hidden data-i18n="readOnlyBanner"></p>
+    <div class="bar">
+      <div class="tabs" role="group" aria-label="任务范围" data-i18n-aria="tabsAria">
+        <button type="button" data-tab="mine" aria-pressed="false" data-i18n-title="tabMineHint"><span data-i18n="tabMine">我的任务</span><span class="n num">0</span></button>
+        <button type="button" data-tab="headless" aria-pressed="false" data-i18n-title="tabHeadlessHint"><span data-i18n="tabHeadless">无界面</span><span class="n num">0</span></button>
+        <button type="button" data-tab="all" aria-pressed="true"><span data-i18n="tabAll">全部</span><span class="n num">0</span></button>
+      </div>
+      <div class="chips-f" role="group" aria-label="按状态筛选" data-i18n-aria="filtersAria">
+        <button type="button" class="fchip err" data-f="failing" aria-pressed="false"><i></i><span data-i18n="fFailing">失败</span></button>
+        <button type="button" class="fchip off" data-f="paused" aria-pressed="false"><i></i><span data-i18n="fPaused">已暂停</span></button>
+        <button type="button" class="fchip live" data-f="running" aria-pressed="false"><i></i><span data-i18n="fRunning">运行中</span></button>
+      </div>
+    </div>
+    <div class="table" role="table">
+      <div class="thead" role="row">
+        <div role="columnheader" data-i18n="colName">任务</div>
+        <div role="columnheader" data-i18n="colSchedule">时间表</div>
+        <div role="columnheader" data-i18n="colNext">下次运行</div>
+        <div role="columnheader" data-i18n="colLast">上次运行</div>
+        <div role="columnheader" data-i18n="colOn">启用</div>
+        <div role="columnheader" class="sr-col" data-i18n="colActions">操作</div>
+      </div>
+      <div id="rows" role="rowgroup"></div>
+      <div id="list-state" class="list-state" data-state="loading"></div>
+    </div>
+    <section id="detail" class="detail" hidden aria-live="polite"></section>
+  </main>
+
+  <aside class="assistant" id="assistant" aria-labelledby="as-title">
+    <header class="as-head">
+      <div>
+        <h2 id="as-title" data-i18n="asTitle">AI 助手</h2>
+        <p class="as-sub" data-i18n="asSub"></p>
+      </div>
+      <div class="as-btns">
+        <button type="button" class="btn btn-ghost btn-sm" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
+        <button type="button" class="btn btn-ghost btn-icon as-close" data-act="as-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+    </header>
+    <div class="as-log" id="as-log" aria-live="polite"></div>
+    <div class="as-foot">
+      <div class="presets">
+        <button type="button" class="preset" data-act="preset" data-i18n="asP1">有哪些任务在失败？</button>
+        <button type="button" class="preset" data-act="preset" data-i18n="asP2">新建一个每天早上 8 点的任务</button>
+        <button type="button" class="preset" data-act="preset" data-i18n="asP3">接下来一小时会运行什么？</button>
+      </div>
+      <form id="as-form" class="as-form">
+        <label class="sr" for="as-input" data-i18n="asLabel">给 AI 助手的消息</label>
+        <textarea id="as-input" rows="2" maxlength="4000" placeholder="" data-i18n-ph="asPh"></textarea>
+        <button type="submit" id="as-send" class="btn btn-primary btn-icon" data-i18n-aria="asSend" aria-label="发送"><svg class="ic"><use href="#i-send"/></svg></button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<dialog id="job-dialog" class="sheet" aria-labelledby="jf-title">
+  <form id="job-form" novalidate>
+    <header class="sheet-head"><h2 id="jf-title">新建任务</h2><button type="button" class="btn btn-ghost btn-icon" data-act="close-dialog" data-i18n-aria="close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button></header>
+    <div class="sheet-body">
+      <div class="f-row two">
+        <label class="fld"><span data-i18n="fmName">名称</span><input name="name" class="mono" required pattern="[a-z0-9][a-z0-9._\-]{0,63}" maxlength="64" autocomplete="off" spellcheck="false"><small data-i18n="fmNameHint"></small></label>
+        <label class="fld"><span data-i18n="fmDescription">说明（可选）</span><input name="description" maxlength="500"></label>
+      </div>
+      <fieldset class="f-group">
+        <legend data-i18n="fmWhat">运行什么</legend>
+        <div class="seg" data-seg="kind" role="group">
+          <button type="button" data-v="command" aria-pressed="true" data-i18n="fmKindCommand">命令</button>
+          <button type="button" data-v="http" aria-pressed="false" data-i18n="fmKindHttp">HTTP</button>
+          <button type="button" data-v="agent" aria-pressed="false" data-i18n="fmKindAgent">AI 提示词</button>
+        </div>
+        <div data-pane="kind" data-v="command" class="pane">
+          <label class="fld"><span data-i18n="fmCommand">命令</span><textarea name="command" class="mono" rows="2" maxlength="4000" spellcheck="false" data-i18n-ph="fmCommandPh"></textarea></label>
+          <label class="fld"><span data-i18n="fmCwd">工作目录</span><input name="cwd" class="mono" spellcheck="false" placeholder="/home/…"></label>
+        </div>
+        <div data-pane="kind" data-v="http" class="pane" hidden>
+          <div class="f-row method">
+            <label class="fld"><span data-i18n="fmMethod">方法</span><select name="method"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
+            <label class="fld"><span data-i18n="fmUrl">网址</span><input name="url" class="mono" type="url" spellcheck="false" placeholder="http://127.0.0.1:9045/jobs/refresh"></label>
+          </div>
+          <label class="fld"><span data-i18n="fmBody">请求体</span><textarea name="body" class="mono" rows="2" spellcheck="false"></textarea></label>
+        </div>
+        <div data-pane="kind" data-v="agent" class="pane" hidden>
+          <label class="fld"><span data-i18n="fmPrompt">提示词</span><textarea name="prompt" rows="4" maxlength="20000" data-i18n-ph="fmPromptPh"></textarea></label>
+          <label class="fld"><span data-i18n="fmModel">模型</span><input name="model" class="mono" spellcheck="false" placeholder="claude/junior"></label>
+        </div>
+      </fieldset>
+      <fieldset class="f-group">
+        <legend data-i18n="fmWhen">什么时候</legend>
+        <div class="seg" data-seg="when" role="group">
+          <button type="button" data-v="cron" aria-pressed="true" data-i18n="fmCron">按日历</button>
+          <button type="button" data-v="every" aria-pressed="false" data-i18n="fmEvery">固定间隔</button>
+          <button type="button" data-v="at" aria-pressed="false" data-i18n="fmAt">一次</button>
+        </div>
+        <div data-pane="when" data-v="cron" class="pane f-row two">
+          <label class="fld"><span data-i18n="fmCronExpr">cron</span><input name="expr" class="mono" spellcheck="false" placeholder="30 8 * * 1-5"></label>
+          <label class="fld"><span data-i18n="fmZone">时区</span><select name="cronTz" class="mono"></select></label>
+        </div>
+        <div data-pane="when" data-v="every" class="pane" hidden>
+          <label class="fld"><span data-i18n="fmEveryVal">间隔</span><input name="every" class="mono" spellcheck="false" placeholder="30m"></label>
+        </div>
+        <div data-pane="when" data-v="at" class="pane f-row two" hidden>
+          <label class="fld"><span data-i18n="fmAtVal">日期和时间</span><input name="atLocal" type="datetime-local" class="mono"></label>
+          <label class="fld"><span data-i18n="fmZone">时区</span><select name="atTz" class="mono"></select></label>
+        </div>
+        <p class="preview" id="jf-preview" aria-live="polite"></p>
+      </fieldset>
+      <div class="f-row two">
+        <label class="fld"><span data-i18n="fmTimeout">超时</span><input name="timeout" class="mono" spellcheck="false" placeholder="10m"></label>
+        <label class="fld check"><input type="checkbox" name="enabled" checked><span data-i18n="fmEnabled">保存后启用</span></label>
+      </div>
+      <p class="note" id="jf-editnote" hidden data-i18n="fmEditNote"></p>
+      <p class="err-text" id="jf-error" role="alert"></p>
+    </div>
+    <footer class="sheet-foot">
+      <button type="button" class="btn" id="jf-cancel" data-i18n="fmCancel">取消</button>
+      <button type="submit" class="btn btn-primary" id="jf-save" data-i18n="fmSave">保存</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="del-dialog" class="sheet sheet-sm" aria-labelledby="del-title">
+  <div class="sheet-body">
+    <h2 id="del-title"></h2>
+    <p data-i18n="delBody"></p>
+  </div>
+  <footer class="sheet-foot">
+    <button type="button" class="btn" id="del-cancel" data-i18n="fmCancel">取消</button>
+    <button type="button" class="btn btn-danger" id="del-ok" data-i18n="delConfirm">确认删除</button>
+  </footer>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./app.ts"></script>
+</body>
+</html>
