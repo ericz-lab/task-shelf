@@ -26,6 +26,9 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
   <symbol id="i-new" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
 </svg>
 
@@ -35,20 +38,22 @@
       <h1><span data-i18n="app">定时任务收纳</span><span class="alt" data-i18n="appAlt">Task Shelf</span></h1>
       <p class="sum" id="sum" aria-live="polite"></p>
     </div>
+    <div class="tools">
     <div class="search" role="search">
       <svg class="ic"><use href="#i-search"/></svg>
       <label class="sr" for="q" data-i18n="searchAria">搜索任务</label>
       <input id="q" type="search" placeholder="搜索任务、应用、命令" data-i18n-ph="search" autocomplete="off">
       <kbd aria-hidden="true">/</kbd>
     </div>
-    <div class="tools">
       <button type="button" class="btn btn-primary" data-act="new"><svg class="ic"><use href="#i-plus"/></svg><span data-i18n="newJob">新建任务</span></button>
-      <button type="button" class="btn as-toggle" data-act="as-open"><svg class="ic"><use href="#i-chat"/></svg><span data-i18n="assistantOpen">AI 助手</span></button>
+      <button type="button" class="btn btn-secondary as-toggle" data-act="as-open"><svg class="ic"><use href="#i-chat"/></svg><span data-i18n="assistantOpen">AI 助手</span></button>
+    </div>
+    <div class="prefs">
       <div class="seg seg-lang" role="group" aria-label="界面语言" data-i18n-aria="langAria">
         <button type="button" data-lang="zh" aria-pressed="true" lang="zh">中</button>
         <button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button>
       </div>
-      <button type="button" class="btn btn-ghost btn-icon" id="theme" aria-label="主题：跟随系统，点按切换">
+      <button type="button" class="icon-btn bordered" id="theme" aria-label="主题：跟随系统，点按切换">
         <svg class="ic th th-system"><use href="#i-auto"/></svg>
         <svg class="ic th th-light"><use href="#i-sun"/></svg>
         <svg class="ic th th-dark"><use href="#i-moon"/></svg>
@@ -82,18 +87,16 @@
       <div id="rows" role="rowgroup"></div>
       <div id="list-state" class="list-state" data-state="loading"></div>
     </div>
+    <p class="list-foot" id="list-foot" hidden></p>
     <section id="detail" class="detail" hidden aria-live="polite"></section>
   </main>
 
   <aside class="assistant" id="assistant" aria-labelledby="as-title">
     <header class="as-head">
-      <div>
-        <h2 id="as-title" data-i18n="asTitle">AI 助手</h2>
-        <p class="as-sub" data-i18n="asSub"></p>
-      </div>
+      <h2 id="as-title" data-i18n="asTitle">AI 助手</h2>
       <div class="as-btns">
-        <button type="button" class="btn btn-ghost btn-sm" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
-        <button type="button" class="btn btn-ghost btn-icon as-close" data-act="as-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn btn-ghost btn-sm as-new" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
+        <button type="button" class="icon-btn as-close" data-act="as-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
       </div>
     </header>
     <div class="as-log" id="as-log" aria-live="polite"></div>
@@ -105,8 +108,8 @@
       </div>
       <form id="as-form" class="as-form">
         <label class="sr" for="as-input" data-i18n="asLabel">给 AI 助手的消息</label>
-        <textarea id="as-input" rows="2" maxlength="4000" placeholder="" data-i18n-ph="asPh"></textarea>
-        <button type="submit" id="as-send" class="btn btn-primary btn-icon" data-i18n-aria="asSend" aria-label="发送"><svg class="ic"><use href="#i-send"/></svg></button>
+        <textarea id="as-input" rows="1" maxlength="4000" placeholder="" data-i18n-ph="asPh"></textarea>
+        <button type="submit" id="as-send" class="btn btn-secondary btn-icon" data-i18n-aria="asSend" aria-label="发送"><svg class="ic"><use href="#i-send"/></svg></button>
       </form>
     </div>
   </aside>

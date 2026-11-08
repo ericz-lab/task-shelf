@@ -39,6 +39,7 @@ export interface Row {
   lastDurationMs: number | null;
   consecutiveErrors: number;
   target: { kind: string; text: string };
+  timeoutMs: number | null;
   /** Mine only: false while the job has no task in ai-space (see syncError). */
   registered: boolean;
   syncError: string | null;
@@ -114,6 +115,7 @@ export function buildRows(i: BuildInput): Row[] {
       lastDurationMs: t.state.lastDurationMs ?? null,
       consecutiveErrors: t.state.consecutiveErrors ?? 0,
       target: job ? jobTarget(job) : targetText(t.target),
+      timeoutMs: job?.timeoutMs ?? t.timeoutMs ?? null,
       registered: true,
       syncError: job?.syncError ?? null,
       archived: false,
@@ -148,6 +150,7 @@ export function buildRows(i: BuildInput): Row[] {
       lastDurationMs: null,
       consecutiveErrors: 0,
       target: jobTarget(j),
+      timeoutMs: j.timeoutMs,
       registered: false,
       syncError: j.archivedAt ? null : j.syncError ?? "not registered in ai-space",
       archived: Boolean(j.archivedAt),

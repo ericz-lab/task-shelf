@@ -3,13 +3,13 @@
  * form, the detail of a selected row, and the assistant. State lives in the URL (?tab&f&q&sel&lang)
  * so a link reproduces the view. Times are shown in the browser's zone; schedules name their own.
  */
-import { durationText, type Lang, scheduleText } from "../src/describe.ts";
+import { durationText, type Lang, runDuration, scheduleText } from "../src/describe.ts";
 import { applyTranslations, tr } from "./i18n.ts";
 
 type Schedule = { kind: "manual" } | { kind: "at"; at: string; tz?: string } | { kind: "every"; everyMs: number; anchorMs?: number } | { kind: "cron"; expr: string; tz?: string };
 interface Row {
   key: string; taskId: string | null; jobId: number | null; app: string; appTitle: { zh: string; en: string } | null; name: string; description: string;
-  owner: "mine" | "system" | "app"; headless: boolean; machine: string; schedule: Schedule | null; zone: string | null; zoneDeclared: boolean;
+  owner: "mine" | "system" | "app"; headless: boolean; machine: string; timeoutMs: number | null; schedule: Schedule | null; zone: string | null; zoneDeclared: boolean;
   enabled: boolean; orphaned: boolean; running: boolean; triggers: number; nextRunAt: string | null; lastRunAt: string | null;
   lastStatus: "ok" | "error" | "skipped" | null; lastError: string | null; lastDurationMs: number | null; consecutiveErrors: number;
   target: { kind: string; text: string }; registered: boolean; syncError: string | null; archived: boolean;
@@ -104,7 +104,7 @@ function relTime(iso: string | number | null): string {
   const diff = ms - Date.now();
   const abs = Math.abs(diff);
   const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "auto", style: "short" });
-  if (abs < 45_000) return diff >= 0 ? t("nextNow") : rtf.format(0, "second");
+  if (abs < 45_000) return diff >= 0 ? t("nextNow") : t("justNow");
   if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), "minute");
   if (abs < 86_400_000) return rtf.format(Math.round(diff / 3_600_000), "hour");
   return rtf.format(Math.round(diff / 86_400_000), "day");
@@ -166,31 +166,31 @@ function visibleRows(): Row[] {
 function lastPill(r: Row): string {
   if (r.lastStatus === "error") return `<span class="pill err">${esc(r.consecutiveErrors > 1 ? t("stErrorN", { n: r.consecutiveErrors }) : t("stError"))}</span>`;
   if (r.lastStatus === "skipped") return `<span class="pill skip">${esc(t("stSkipped"))}</span>`;
-  return `<span class="pill ok">${esc(t("stOk"))}</span>`;
+  return `<span class="pill ok"><svg class="ic"><use href="#i-check"/></svg>${esc(t("stOk"))}</span>`;
 }
 
 function rowHtml(r: Row): string {
   const st = statusOf(r);
   const mine = r.owner === "mine";
   const canAct = mine && S.writable && !r.archived;
-  const next = r.nextRunAt ? `<span class="rel">${esc(relTime(r.nextRunAt))}</span><span class="abs mono">${esc(absTime(r.nextRunAt))}</span>` : `<span class="rel dim">${t("noNext")}</span>`;
+  const next = !r.enabled ? `<span class="rel dim">${esc(t("stPaused"))}</span>` : r.nextRunAt ? `<span class="rel">${esc(relTime(r.nextRunAt))}</span><span class="abs mono">${esc(absTime(r.nextRunAt))}</span>` : `<span class="rel dim">${t("noNext")}</span>`;
   const last = r.running
     ? `<span class="pill live">${esc(t("stRunning"))}</span>`
     : r.lastRunAt
-      ? `<span class="rel">${esc(relTime(r.lastRunAt))}</span><span class="last-line">${lastPill(r)}${r.lastDurationMs !== null ? `<span class="mono dim">${esc(durationText(r.lastDurationMs, S.lang))}</span>` : ""}</span>`
+      ? `<span class="rel">${esc(relTime(r.lastRunAt))}</span><span class="last-line">${lastPill(r)}${r.lastDurationMs !== null ? `<span class="mono dim">${esc(runDuration(r.lastDurationMs))}</span>` : ""}</span>`
       : `<span class="rel dim">${esc(t("stNever"))}</span>`;
   const toggle = mine && !r.archived
     ? `<label class="switch"><input type="checkbox" data-act="toggle" data-id="${r.jobId}" ${r.enabled ? "checked" : ""} ${canAct && r.registered ? "" : "disabled"} aria-label="${esc(t("toggleAria", { name: r.name }))}"><span aria-hidden="true"></span></label>`
     : mine ? `<span class="lock">${esc(t("stArchived"))}</span>` : `<span class="lock" title="${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}"><svg class="ic"><use href="#i-lock"/></svg><span>${esc(t("readOnly"))}</span></span>`;
   const actions = canAct && r.registered
-    ? `<button type="button" class="btn btn-sm" data-act="run" data-id="${r.jobId}"><svg class="ic"><use href="#i-play"/></svg><span>${esc(t("runNow"))}</span></button><button type="button" class="btn btn-sm btn-ghost" data-act="edit" data-id="${r.jobId}">${esc(t("edit"))}</button>`
+    ? `<button type="button" class="icon-btn" data-act="run" data-id="${r.jobId}" title="${esc(t("runNow"))}" aria-label="${esc(t("runNow"))} ${esc(r.name)}"><svg class="ic"><use href="#i-play"/></svg></button><button type="button" class="icon-btn" data-act="edit" data-id="${r.jobId}" title="${esc(t("edit"))}" aria-label="${esc(t("edit"))} ${esc(r.name)}"><svg class="ic"><use href="#i-edit"/></svg></button>`
     : canAct && !r.registered ? `<button type="button" class="btn btn-sm" data-act="reconcile">${esc(t("reregister"))}</button>`
     : mine && r.archived && S.writable ? `<button type="button" class="btn btn-sm" data-act="restore" data-id="${r.jobId}">${esc(t("restore"))}</button>` : "";
   return `<div class="row ${st.cls}${S.sel === r.key ? " sel" : ""}${r.enabled && !r.orphaned ? "" : " muted"}" role="row" data-key="${esc(r.key)}" tabindex="0" aria-selected="${S.sel === r.key}">
-    <div class="c-name" role="cell"><span class="dot ${st.cls}" title="${esc(st.text)}"></span><span class="nm"><b>${esc(r.name)}</b><span class="meta mono">${esc(appLabel(r))}${r.owner !== "mine" ? ` · ${esc(r.app)}` : ""}${r.headless ? ` · ${esc(t("headlessTag"))}` : ""}</span>${r.syncError && mine ? `<span class="warn">${esc(r.syncError)}</span>` : ""}</span></div>
+    <div class="c-name" role="cell"><span class="dot ${st.cls}" title="${esc(st.text)}"></span><span class="nm"><b>${esc(r.name)}</b><span class="meta" title="${esc(r.app)}">${esc(appLabel(r))}${r.headless && !mine ? ` · ${esc(t("headlessTag"))}` : ""}</span>${r.syncError && mine ? `<span class="warn">${esc(r.syncError)}</span>` : ""}</span></div>
     <div class="c-sched" role="cell">${scheduleCell(r)}</div>
-    <div class="c-next" role="cell">${next}</div>
-    <div class="c-last" role="cell">${last}</div>
+    <div class="c-next" role="cell"><span class="cell-label">${esc(t("colNext"))}</span>${next}</div>
+    <div class="c-last" role="cell"><span class="cell-label">${esc(t("colLast"))}</span>${last}</div>
     <div class="c-on" role="cell">${toggle}</div>
     <div class="c-act" role="cell">${actions}</div>
   </div>`;
@@ -243,6 +243,9 @@ function renderList() {
     state.innerHTML = "";
   }
   list.innerHTML = rows.map(rowHtml).join("");
+  const foot = $("#list-foot");
+  foot.hidden = !rows.length;
+  foot.textContent = t("shownOf", { n: rows.length, total: S.rows.filter((r) => !r.archived || S.tab === "mine").length });
 }
 
 // ---------------------------------------------------------------- detail
@@ -258,32 +261,41 @@ async function renderDetail() {
   const canAct = mine && S.writable && !r.archived && r.registered;
   const src = mine ? t("dSourceMine", { id: r.taskId ?? "—" }) : r.owner === "system" ? t("dSourceSystem") : t("dSourceApp", { app: r.app });
   const zone = r.zone ? (r.zoneDeclared ? r.zone : t("zoneMachine", { zone: r.zone })) : "—";
+  const icon = (id: string) => `<svg class="ic"><use href="#${id}"/></svg>`;
   const btns = mine
     ? r.archived
-      ? (S.writable ? `<button type="button" class="btn" data-act="restore" data-id="${r.jobId}">${esc(t("restore"))}</button>` : "")
-      : `<button type="button" class="btn btn-primary" data-act="run" data-id="${r.jobId}" ${canAct ? "" : "disabled"}><svg class="ic"><use href="#i-play"/></svg><span>${esc(t("runNow"))}</span></button>
-         <button type="button" class="btn" data-act="${r.enabled ? "pause" : "resume"}" data-id="${r.jobId}" ${canAct ? "" : "disabled"}>${esc(r.enabled ? t("pause") : t("resume"))}</button>
-         <button type="button" class="btn" data-act="edit" data-id="${r.jobId}" ${S.writable ? "" : "disabled"}>${esc(t("edit"))}</button>
-         <button type="button" class="btn btn-danger" data-act="delete" data-id="${r.jobId}" ${S.writable ? "" : "disabled"}>${esc(t("del"))}</button>`
-    : `<span class="lock"><svg class="ic"><use href="#i-lock"/></svg><span>${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}</span></span>`;
+      ? (S.writable ? `<button type="button" class="btn btn-secondary" data-act="restore" data-id="${r.jobId}">${esc(t("restore"))}</button>` : "")
+      : `<button type="button" class="btn btn-secondary" data-act="run" data-id="${r.jobId}" ${canAct ? "" : "disabled"}>${icon("i-play")}<span>${esc(t("runNow"))}</span></button>
+         <button type="button" class="btn btn-secondary" data-act="${r.enabled ? "pause" : "resume"}" data-id="${r.jobId}" ${canAct ? "" : "disabled"}>${icon(r.enabled ? "i-pause" : "i-play")}<span>${esc(r.enabled ? t("pause") : t("resume"))}</span></button>
+         <button type="button" class="btn btn-secondary" data-act="edit" data-id="${r.jobId}" ${S.writable ? "" : "disabled"}>${icon("i-edit")}<span>${esc(t("edit"))}</span></button>
+         <button type="button" class="btn btn-ghost btn-del" data-act="delete" data-id="${r.jobId}" ${S.writable ? "" : "disabled"}>${icon("i-trash")}<span>${esc(t("del"))}</span></button>`
+    : `<span class="lock">${icon("i-lock")}<span>${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}</span></span>`;
+  const st = statusOf(r);
+  const pill = st.cls === "err" ? "err" : st.cls === "live" ? "live" : st.cls === "ok" ? "" : "skip";
   const keep = detailFor === r.key ? $("#d-runs", box)?.innerHTML : "";
-  box.innerHTML = `<header class="d-head"><div><h2>${esc(r.name)}</h2><p class="meta mono">${esc(appLabel(r))} · ${esc(r.app)} · ${esc(r.machine)}</p></div><div class="d-btns">${btns}<button type="button" class="btn btn-ghost btn-icon" data-act="close-detail" aria-label="${esc(t("close"))}"><svg class="ic"><use href="#i-x"/></svg></button></div></header>
-    <dl class="d-grid">
-      <div><dt>${esc(t("dDescription"))}</dt><dd>${r.description ? esc(r.description) : `<span class="dim">${esc(t("dNoDescription"))}</span>`}</dd></div>
-      <div><dt>${esc(t("colSchedule"))}</dt><dd>${scheduleCell(r)}</dd></div>
-      <div><dt>${esc(t("dZone"))}</dt><dd class="mono">${esc(zone)}</dd></div>
-      <div><dt>${esc(t("dSource"))}</dt><dd>${esc(src)}</dd></div>
-      <div class="wide"><dt>${esc(t("dTarget"))} · <span class="mono">${esc(r.target.kind)}</span></dt><dd><pre class="code">${esc(r.target.text)}</pre></dd></div>
-      ${r.lastError ? `<div class="wide"><dt>${esc(t("stError"))}</dt><dd class="err-text">${esc(r.lastError)}</dd></div>` : ""}
+  const words = r.schedule ? scheduleText(r.schedule.kind === "at" ? { ...r.schedule, tz: r.zone ?? undefined } : r.schedule, S.lang) : "—";
+  const fact = (label: string, value: string, mono = false, title = "") => `<div><dt>${esc(label)}</dt><dd${mono ? ' class="mono"' : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd></div>`;
+  box.innerHTML = `<header class="d-head"><div class="d-title"><h2>${esc(r.name)}</h2>${pill ? `<span class="pill ${pill}">${esc(st.text)}</span>` : ""}</div><div class="d-btns">${btns}<button type="button" class="icon-btn" data-act="close-detail" aria-label="${esc(t("close"))}" title="${esc(t("close"))}">${icon("i-x")}</button></div></header>
+    ${r.description ? `<p class="d-desc">${esc(r.description)}</p>` : ""}
+    <pre class="code${r.target.kind === "command" ? " cmd" : ""}" aria-label="${esc(t("dTarget"))}">${esc(r.target.text)}</pre>
+    <dl class="facts">
+      ${fact(t("colSchedule"), esc(words) + (r.triggers ? ` · ${esc(t("triggersN", { n: r.triggers }))}` : ""))}
+      ${r.schedule?.kind === "cron" ? fact("Cron", esc(r.schedule.expr), true) : ""}
+      ${fact(t("dZone"), esc(zone), true, r.zone && !r.zoneDeclared ? t("zoneMachineTitle", { zone: r.zone }) : "")}
+      ${r.timeoutMs ? fact(t("dTimeout"), esc(durationText(r.timeoutMs, S.lang)), true) : ""}
+      ${fact(t("dSource"), esc(src))}
+      ${fact(t("dKind"), esc(t(`kind_${r.target.kind}`)))}
     </dl>
-    <section class="d-sec"><h3>${esc(t("dRuns"))}</h3><div id="d-runs" class="trace">${keep || `<p class="dim">${esc(t("loading"))}</p>`}</div></section>
+    ${r.lastError ? `<p class="d-err"><b>${esc(t("stError"))}</b> <span class="mono">${esc(r.lastError)}</span></p>` : ""}
+    <section class="d-sec"><h3>${esc(t("dRuns"))} <span>${esc(t("dRunsLast", { n: 10 }))}</span></h3><div id="d-runs" class="runs">${keep || `<p class="dim">${esc(t("loading"))}</p>`}</div></section>
     ${mine ? `<section class="d-sec"><h3>${esc(t("dChanges"))}</h3><ol id="d-changes" class="changes"></ol></section>` : ""}`;
   detailFor = r.key;
   const key = r.key;
   try {
     const { runs } = await api<{ runs: Run[] }>(`/api/rows/${encodeURIComponent(key)}/runs?limit=10`);
     if (S.sel !== key) return;
-    $("#d-runs", box).innerHTML = runs.length ? runs.map(runHtml).join("") : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
+    const longest = Math.max(1, ...runs.map((x) => x.endedAt - x.startedAt));
+    $("#d-runs", box).innerHTML = runs.length ? runs.map((x) => runHtml(x, longest)).join("") : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
   } catch (e) {
     if (S.sel === key) $("#d-runs", box).innerHTML = `<p class="err-text">${esc(errText(e))}</p>`;
   }
@@ -297,10 +309,12 @@ async function renderDetail() {
   }
 }
 
-function runHtml(r: Run): string {
+function runHtml(r: Run, longest: number): string {
   const cls = r.status === "ok" ? "ok" : r.status === "error" ? "err" : "skip";
   const first = (r.error || r.output || "").split("\n").find((l) => l.trim()) ?? "";
-  return `<div class="run ${cls}"><span class="dot ${cls}"></span><span class="mono">${esc(absTime(r.startedAt))}</span><span class="tag">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</span><span class="pill ${cls}">${esc(t(r.status === "ok" ? "stOk" : r.status === "error" ? "stError" : "stSkipped"))}</span><span class="mono dim">${esc(durationText(r.endedAt - r.startedAt, S.lang))}</span>${first ? `<code class="out" title="${esc((r.error || r.output || "").slice(0, 2000))}">${esc(first.slice(0, 240))}</code>` : ""}</div>`;
+  const ms = Math.max(0, r.endedAt - r.startedAt);
+  const pill = r.status === "ok" ? `<span class="pill ok"><svg class="ic"><use href="#i-check"/></svg>${esc(t("stOk"))}</span>` : `<span class="pill ${cls}">${esc(t(r.status === "error" ? "stError" : "stSkipped"))}</span>`;
+  return `<div class="run ${cls}"><span class="t mono">${esc(absTime(r.startedAt))}</span><span class="k">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</span><span class="s">${pill}</span><span class="rbar"><span class="track"><span class="fill" style="width:${Math.max(2, Math.round((ms / longest) * 100))}%"></span></span><span class="dur mono">${esc(runDuration(ms))}</span></span><code class="out" title="${esc((r.error || r.output || "").slice(0, 2000))}">${esc(first.slice(0, 240))}</code></div>`;
 }
 
 // ---------------------------------------------------------------- loading
@@ -502,7 +516,7 @@ function chipHtml(a: ActionResult): string {
 function confirmHtml(m: Message): string {
   const c = m.confirm!;
   if (c.state === "open") {
-    return `<div class="confirm" data-token="${esc(c.token)}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><div class="confirm-btns"><button type="button" class="btn btn-danger btn-sm" data-act="confirm-yes">${esc(t("asConfirmYes"))}</button><button type="button" class="btn btn-sm" data-act="confirm-no">${esc(t("asConfirmNo"))}</button></div></div>`;
+    return `<div class="confirm" data-token="${esc(c.token)}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><div class="confirm-btns"><button type="button" class="btn btn-primary btn-sm" data-act="confirm-yes">${esc(t("asConfirmYes"))}</button><button type="button" class="btn btn-ghost btn-sm" data-act="confirm-no">${esc(t("asConfirmNo"))}</button></div></div>`;
   }
   const label = c.state === "done" ? t("asConfirmDone") : c.state === "declined" ? t("asConfirmDeclined") : t("asConfirmFailed");
   return `<div class="confirm closed ${c.state}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><span class="pill ${c.state === "done" ? "ok" : c.state === "failed" ? "err" : "skip"}">${esc(label)}</span></div>`;
@@ -511,10 +525,10 @@ function confirmHtml(m: Message): string {
 function renderChat() {
   const log = $("#as-log");
   const msgs = S.messages.map((m) => m.role === "user"
-    ? `<div class="msg me"><span class="who">${esc(t("asYou"))}</span><p>${esc(m.text)}</p></div>`
-    : `<div class="msg bot"><span class="who">${esc(t("asBot"))}</span><p>${esc(m.text)}</p>${m.actions.length ? `<ul class="chips">${m.actions.map(chipHtml).join("")}</ul>` : ""}${m.confirm ? confirmHtml(m) : ""}</div>`);
-  const hello = `<div class="msg bot hello"><span class="who">${esc(t("asBot"))}</span><p>${esc(S.assistantOn ? t("asHello") : t("asUnavailable"))}</p></div>`;
-  log.innerHTML = hello + msgs.join("") + (S.thinking ? `<div class="msg bot thinking"><span class="who">${esc(t("asBot"))}</span><p><span class="pulse"></span>${esc(t("asThinking"))}</p></div>` : "");
+    ? `<div class="msg me"><span class="sr">${esc(t("asYou"))}</span><p>${esc(m.text)}</p></div>`
+    : `<div class="msg bot"><span class="sr">${esc(t("asBot"))}</span><p>${esc(m.text)}</p>${m.actions.length ? `<ul class="chips">${m.actions.map(chipHtml).join("")}</ul>` : ""}${m.confirm ? confirmHtml(m) : ""}</div>`);
+  const hello = `<div class="msg bot hello"><span class="sr">${esc(t("asBot"))}</span><p>${esc(S.assistantOn ? t("asHello") : t("asUnavailable"))}</p></div>`;
+  log.innerHTML = hello + msgs.join("") + (S.thinking ? `<div class="msg bot thinking"><span class="sr">${esc(t("asBot"))}</span><p><span class="pulse"></span>${esc(t("asThinking"))}</p></div>` : "");
   log.scrollTop = log.scrollHeight;
   $<HTMLButtonElement>("#as-send").disabled = S.thinking || !S.assistantOn;
 }
@@ -651,7 +665,15 @@ $("#del-ok").addEventListener("click", async () => {
   $<HTMLDialogElement>("#del-dialog").close();
   if (deleting !== null) { const id = deleting; deleting = null; if (S.rows.find((r) => r.jobId === id)?.key === S.sel) S.sel = null; await act("archive", id); }
 });
-$("#as-form").addEventListener("submit", (e) => { e.preventDefault(); const i = $<HTMLTextAreaElement>("#as-input"); const v = i.value; i.value = ""; void send(v); });
+/** The composer is one line and grows with what is typed, up to its max height. */
+function fitComposer() {
+  const i = $<HTMLTextAreaElement>("#as-input");
+  i.style.height = "";
+  if (i.value) i.style.height = `${Math.min(i.scrollHeight + 2, 160)}px`;
+  i.style.overflowY = i.scrollHeight > 160 ? "auto" : "hidden";
+}
+$("#as-input").addEventListener("input", fitComposer);
+$("#as-form").addEventListener("submit", (e) => { e.preventDefault(); const i = $<HTMLTextAreaElement>("#as-input"); const v = i.value; i.value = ""; fitComposer(); void send(v); });
 $("#as-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $<HTMLFormElement>("#as-form").requestSubmit(); } });
 
 applyTranslations(document, S.lang);

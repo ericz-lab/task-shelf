@@ -27,6 +27,15 @@ export function durationText(ms: number, lang: Lang): string {
   return parts.join(" ");
 }
 
+/** How long a run took, short and the same in both languages (as the design shows it): 3 ms, 2.3 s, 41 s, 4m 35s. */
+export function runDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 10_000) return `${(Math.floor(ms / 100) / 10).toFixed(1)} s`;
+  if (ms < 60_000) return `${Math.round(ms / 1000)} s`;
+  return durationText(ms, "en");
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const isNum = (s: string) => /^\d+$/.test(s);
 

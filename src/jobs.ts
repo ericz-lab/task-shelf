@@ -271,7 +271,7 @@ export class Shelf {
     this.needWrite();
     if (!job.spaceTaskId) throw new JobError("not-registered", `${job.name} is not registered in ai-space yet`, 409);
     const { started } = await this.spaceCall(() => this.space.runTask(job.spaceTaskId!));
-    this.log(job, actor, "run", started ? "started" : "already running");
+    this.log(job, actor, "run", started ? "" : "already running");
     return { job, started };
   }
 

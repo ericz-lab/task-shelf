@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cronText, durationText, scheduleText } from "./describe.ts";
+import { cronText, durationText, runDuration, scheduleText } from "./describe.ts";
 import { ScheduleError, isZone, localInstants, nextRuns, parseDuration, parseInstant, parseSchedule, sameSchedule, toSpaceSchedule } from "./schedule.ts";
 
 // 2026-11-08T13:00:00Z = 05:00 in Los Angeles (PST), 21:00 in Shanghai.
@@ -128,6 +128,10 @@ describe("in words", () => {
 
   test("intervals and one-time runs", () => {
     expect(durationText(5_400_000, "zh")).toBe("1 小时 30 分钟");
+    expect(runDuration(3)).toBe("3 ms");
+    expect(runDuration(2_340)).toBe("2.3 s");
+    expect(runDuration(41_400)).toBe("41 s");
+    expect(runDuration(275_000)).toBe("4m 35s");
     expect(scheduleText({ kind: "every", everyMs: 1_800_000 }, "en")).toBe("Every 30m");
     expect(scheduleText({ kind: "at", at: "2026-11-10T01:00:00.000Z", tz: "Asia/Shanghai" }, "zh")).toBe("一次 · 11月10日 09:00");
   });
