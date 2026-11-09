@@ -59,7 +59,7 @@ const provides = (p: unknown, name: string): boolean =>
   Array.isArray(p) ? p.some((x) => (typeof x === "string" ? x : (x as { name?: string })?.name) === name) : Boolean(p && typeof p === "object" && name in (p as object));
 
 /** The peers running this app, read from ai-space's catalogue; kept for 30 s. */
-export function machineFinder(o: { apiUrl: string; app: string; local: string; fetch?: typeof fetch; now?: () => number }) {
+export function machineFinder(o: { apiUrl: string; app: string; local: string; token: string; fetch?: typeof fetch; now?: () => number }) {
   const f = o.fetch ?? fetch;
   const now = o.now ?? Date.now;
   let cache: { at: number; value: Machines } | null = null;
@@ -67,7 +67,7 @@ export function machineFinder(o: { apiUrl: string; app: string; local: string; f
     if (cache && now() - cache.at < 30_000) return cache.value;
     let value: Machines;
     try {
-      const res = await f(`${o.apiUrl}/api/capabilities`, { signal: AbortSignal.timeout(8_000) });
+      const res = await f(`${o.apiUrl}/api/capabilities`, { headers: o.token ? { authorization: `Bearer ${o.token}` } : {}, signal: AbortSignal.timeout(8_000) });
       if (!res.ok) throw new Error(`ai-space answered HTTP ${res.status}`);
       const d = (await res.json()) as CapabilityList;
       const peers = [...new Set((d.apps ?? []).filter((a) => a.peer && a.app === o.app && provides(a.provides, CAPABILITY)).map((a) => a.peer!))].sort();

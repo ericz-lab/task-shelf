@@ -222,7 +222,7 @@ if (import.meta.main) {
   const op = await operatorToken();
   const space = httpSpace({ apiUrl: config.spaceApiUrl, appToken: config.spaceAppToken, operatorToken: op });
   const model = modelClient({ apiUrl: config.spaceApiUrl, token: config.spaceAppToken });
-  const machines = machineFinder({ apiUrl: config.spaceApiUrl, app: config.app, local: config.machine });
+  const machines = machineFinder({ apiUrl: config.spaceApiUrl, app: config.app, local: config.machine, token: config.spaceAppToken });
   const forward = forwarder({ apiUrl: config.spaceApiUrl, app: config.app, token: config.spaceAppToken });
   const app = createServer({ db, space, model, machines, forward });
   console.log(`[task-shelf] listening on http://127.0.0.1:${app.port} · machine ${config.machine || "?"} (${serverZone()}) · writes ${op ? "on" : "off (no operator credential)"} · assistant ${model ? "on" : "off"}`);

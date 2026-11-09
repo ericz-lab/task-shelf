@@ -32,20 +32,20 @@ describe("readRemote", () => {
 });
 
 describe("machineFinder", () => {
-  test("peers whose ai-space lists this app's ops", async () => {
-    const f = (async () => Response.json({ ok: true, apps: [
+  test("peers whose ai-space lists this app's ops, asked with the app token", async () => {
+    const f = (async (_u: string, init: RequestInit) => (init.headers as Record<string, string>).authorization !== "Bearer t" ? new Response("{}", { status: 401 }) : Response.json({ ok: true, apps: [
       { app: "task-shelf", provides: [{ name: "ops" }] },
       { app: "task-shelf", peer: "thinkbook", provides: [{ name: "ops" }] },
       { app: "task-shelf", peer: "david", provides: [{ name: "ops" }] },
       { app: "task-shelf", peer: "old", provides: [] },
       { app: "hive", peer: "x", provides: [{ name: "ops" }] },
     ] })) as unknown as typeof fetch;
-    expect(await machineFinder({ apiUrl: "http://s", app: "task-shelf", local: "seoul", fetch: f })()).toEqual({ local: "seoul", peers: ["david", "thinkbook"], error: null });
+    expect(await machineFinder({ apiUrl: "http://s", app: "task-shelf", local: "seoul", token: "t", fetch: f })()).toEqual({ local: "seoul", peers: ["david", "thinkbook"], error: null });
   });
 
   test("ai-space down: this machine only, with the error", async () => {
     const f = (async () => { throw new Error("refused"); }) as unknown as typeof fetch;
-    expect(await machineFinder({ apiUrl: "http://s", app: "task-shelf", local: "seoul", fetch: f })()).toMatchObject({ peers: [], error: "refused" });
+    expect(await machineFinder({ apiUrl: "http://s", app: "task-shelf", local: "seoul", token: "t", fetch: f })()).toMatchObject({ peers: [], error: "refused" });
   });
 });
 

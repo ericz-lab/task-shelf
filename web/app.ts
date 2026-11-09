@@ -356,7 +356,8 @@ async function load() {
     const counts: Counts = { total: 0, enabled: 0, failing: 0, running: 0, paused: 0, mine: 0, headless: 0 };
     const nexts: Row[] = [];
     for (const g of got) {
-      const name = g.d?.machine || (g.via || m.local);
+      // A peer goes by the name this space gives it; this machine by its own.
+      const name = g.via || g.d?.machine || m.local;
       machines.push({ via: g.via, name, writable: Boolean(g.d?.writable), error: g.e ?? g.d?.spaceError ?? null });
       if (!g.d) continue;
       for (const r of g.d.rows) rows.push({ ...r, via: g.via, uid: g.via ? `${g.via}:${r.key}` : r.key });
