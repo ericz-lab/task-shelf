@@ -20,6 +20,11 @@ export const DICT: Record<string, { zh: string; en: string }> = {
   sumRunning: { zh: "{n} 个运行中", en: "{n} running" },
   sumNext: { zh: "下一个 {time} {name}", en: "next {time} {name}" },
   sumMachine: { zh: "本机 {name}", en: "machine {name}" },
+  sumMachines: { zh: "{n} 台机器", en: "{n} machines" },
+  machinesDown: { zh: "{names} 读取失败：{error}", en: "Cannot read {names}: {error}" },
+  readOnlyOn: { zh: "{name} 上的 Task Shelf 没有 ai-space 管理凭据：那台机器的任务只能查看。", en: "Task Shelf on {name} has no ai-space operator credential: its jobs can be viewed, not changed." },
+  fmMachine: { zh: "在哪台机器上运行", en: "Runs on machine" },
+  asMachine: { zh: "助手所在机器", en: "Assistant's machine" },
   readOnlyBanner: { zh: "这个应用没有拿到 ai-space 的管理凭据：可以查看，不能修改任务。", en: "This app has no ai-space operator credential: tasks can be viewed, not changed." },
 
   tabsAria: { zh: "任务范围", en: "Task scope" },
@@ -217,6 +222,8 @@ export const DICT: Record<string, { zh: string; en: string }> = {
   "err-space": { zh: "ai-space 没有接受：{error}", en: "ai-space refused: {error}" },
   "err-cross-origin": { zh: "请求被拒绝（不是从本页面发出的）", en: "Refused (not sent from this page)" },
   "err-network": { zh: "连不上本应用的服务", en: "Cannot reach this app's service" },
+  "err-no-machine": { zh: "这台机器上没有运行 Task Shelf", en: "That machine does not run Task Shelf" },
+  "err-peer-unreachable": { zh: "连不上那台机器：{error}", en: "Cannot reach that machine: {error}" },
 };
 
 export function tr(key: string, lang: Lang, vars?: Record<string, string | number>): string {

@@ -15,6 +15,13 @@ its result, and whether it is on. Selecting a row shows its runs and output.
 The **AI assistant** on the right does the same things by chat: "every weekday at 08:30 Los Angeles
 time run `bun scripts/report.ts`", "pause the export", "run ping now", "why did ping fail?". Deleting a job always waits for you to press 确认删除 / Confirm.
 
+## Several machines
+
+Install it on every machine whose scheduler should run jobs. The page on the hub shows the jobs of every
+peer that runs Task Shelf too, each row tagged with its machine, and changes them there: the form asks which
+machine a new job runs on, and the assistant has a machine menu. Each job still lives and runs on its own
+machine. Point every machine's `SPACE_APP_URL_TASK_SHELF` at the hub's page so the panel shows one tile.
+
 ## How it differs from ai-space's built-in Tasks window
 
 The panel's Settings → 定时任务 lists the tasks apps declare in their `space.yaml`; a new task there

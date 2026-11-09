@@ -13,6 +13,7 @@ import { config, databasePath, operatorToken, serverZone } from "./config.ts";
 import { changesOf, getJob, keptRuns, openDatabase } from "./db.ts";
 import { type Lang, scheduleText } from "./describe.ts";
 import { JobError, Shelf } from "./jobs.ts";
+import { type Machines, type RemoteRequest, callerAllowed, forwarder, machineFinder, readRemote } from "./remote.ts";
 import { ScheduleError, isZone, nextRuns, parseSchedule } from "./schedule.ts";
 import { httpSpace, modelClient, type ModelFn, type SpaceApi, type SpaceRun } from "./space.ts";
 
@@ -27,6 +28,9 @@ export interface ServerOptions {
   dataDir?: string;
   /** false: no page, for tests. */
   web?: boolean;
+  /** Peers running this app, and how to reach one; absent: this machine only. */
+  machines?: () => Promise<Machines>;
+  forward?: (peer: string, req: RemoteRequest) => Promise<Response>;
   now?: () => number;
   log?: (line: string) => void;
 }
@@ -90,7 +94,24 @@ export function createServer(opts: ServerOptions) {
   };
   const jobAction = (fn: (id: string, b: Record<string, unknown>) => Promise<unknown>) => write(async (req) => json({ ok: true, ...(await fn(req.params.id!, await body(req)) as object) }));
 
-  const server = Bun.serve({
+  const machines = opts.machines ?? (async (): Promise<Machines> => ({ local: machine, peers: [], error: null }));
+
+  /** A page request for another machine: `/api/m/<peer>/<route>` goes to that machine's instance. */
+  const viaPeer = async (req: Request & { params: Record<string, string> }): Promise<Response> => {
+    const method = req.method.toUpperCase();
+    if (method !== "GET" && !sameOrigin(req)) return fail("cross-origin", "writes must come from this app's page as JSON", 403);
+    const peer = req.params.peer!;
+    const { peers } = await machines();
+    if (!opts.forward || !peers.includes(peer)) return fail("no-machine", `no machine ${peer} runs this app`, 404);
+    const url = new URL(req.url);
+    const rest = url.pathname.slice(`/api/m/${encodeURIComponent(peer)}`.length) + url.search;
+    const remote = readRemote({ method, path: rest, ...(method === "GET" ? {} : { body: await body(req) }) });
+    if (!remote) return fail("not-found", "not found", 404);
+    return opts.forward(peer, remote);
+  };
+
+  let selfPort = 0;
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     hostname: "127.0.0.1",
     port: opts.port ?? config.port,
     idleTimeout: 255,
@@ -98,6 +119,26 @@ export function createServer(opts: ServerOptions) {
       "/": opts.web === false ? () => new Response("no page", { status: 404 }) : index,
       "/healthz": () => json({ ok: true }),
       "/icon.svg": () => new Response(Bun.file(new URL("../icon.svg", import.meta.url).pathname), { headers: { "content-type": "image/svg+xml", "cache-control": "max-age=3600" } }),
+
+      // The machines this page shows: this one first, then the peers running this app.
+      "/api/machines": async () => json({ ok: true, ...(await machines()) }),
+      "/api/m/:peer/*": { GET: viaPeer, POST: viaPeer, PATCH: viaPeer },
+
+      // The bus capability `ops`: the same app on another space asks for one of this page's routes.
+      "/api/remote": {
+        POST: async (req): Promise<Response> => {
+          if (!callerAllowed(req.headers.get("x-space-caller"), app)) return fail("forbidden", "only this app on another space may call ops", 403);
+          if ((req.headers.get("content-type") ?? "").split(";")[0]!.trim() !== "application/json") return fail("bad-request", "JSON body expected", 400);
+          const r = readRemote(await body(req));
+          if (!r) return fail("not-found", "not a route of this page", 404);
+          const res: Response = await fetch(`http://127.0.0.1:${selfPort}${r.path}`, {
+            method: r.method,
+            headers: r.method === "GET" ? {} : { "content-type": "application/json" },
+            ...(r.method === "GET" ? {} : { body: JSON.stringify(r.body ?? {}) }),
+          });
+          return new Response(res.body, { status: res.status, headers: { "content-type": res.headers.get("content-type") ?? "application/json; charset=utf-8", "cache-control": "no-store" } });
+        },
+      },
 
       "/api/meta": () => json({ ok: true, app, machine, machineZone, defaultZone: config.defaultZone, writable: space.canWrite(), assistant: Boolean(model) }),
 
@@ -171,6 +212,7 @@ export function createServer(opts: ServerOptions) {
     },
     fetch: () => fail("not-found", "not found", 404),
   });
+  selfPort = server.port ?? 0;
 
   return { server, port: server.port, shelf, assistant, stop: () => server.stop(true), reconcile: () => shelf.reconcile().then((r) => { if (r.created.length || r.fixed.length || r.failed.length || r.strays.length) log(`reconcile: created ${r.created.join(",") || "-"} fixed ${r.fixed.join(",") || "-"} failed ${r.failed.map((f) => f.name).join(",") || "-"} unknown ${r.strays.join(",") || "-"}`); return r; }) };
 }
@@ -180,7 +222,9 @@ if (import.meta.main) {
   const op = await operatorToken();
   const space = httpSpace({ apiUrl: config.spaceApiUrl, appToken: config.spaceAppToken, operatorToken: op });
   const model = modelClient({ apiUrl: config.spaceApiUrl, token: config.spaceAppToken });
-  const app = createServer({ db, space, model });
+  const machines = machineFinder({ apiUrl: config.spaceApiUrl, app: config.app, local: config.machine });
+  const forward = forwarder({ apiUrl: config.spaceApiUrl, app: config.app, token: config.spaceAppToken });
+  const app = createServer({ db, space, model, machines, forward });
   console.log(`[task-shelf] listening on http://127.0.0.1:${app.port} · machine ${config.machine || "?"} (${serverZone()}) · writes ${op ? "on" : "off (no operator credential)"} · assistant ${model ? "on" : "off"}`);
   // A job whose ai-space task went missing (a lost write, a restored database) is put back.
   setTimeout(() => { app.reconcile().catch((e) => console.error(`[task-shelf] reconcile failed: ${(e as Error).message}`)); }, 3000);

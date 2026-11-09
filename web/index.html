@@ -93,6 +93,7 @@
   <aside class="assistant" id="assistant" aria-labelledby="as-title">
     <header class="as-head">
       <h2 id="as-title" data-i18n="asTitle">AI 助手</h2>
+      <select id="as-machine" class="mach-pick" hidden data-i18n-aria="asMachine" aria-label="助手所在机器"></select>
       <div class="as-btns">
         <button type="button" class="btn btn-ghost btn-sm as-new" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
         <button type="button" class="icon-btn as-close" data-act="as-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
@@ -118,6 +119,7 @@
   <form id="job-form" novalidate>
     <header class="sheet-head"><h2 id="jf-title">新建任务</h2><button type="button" class="btn btn-ghost btn-icon" data-act="close-dialog" data-i18n-aria="close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button></header>
     <div class="sheet-body">
+      <label class="fld" id="jf-machine-row" hidden><span data-i18n="fmMachine">在哪台机器上运行</span><select name="machine" id="jf-machine"></select></label>
       <div class="f-row two">
         <label class="fld"><span data-i18n="fmName">名称</span><input name="name" class="mono" required pattern="[a-z0-9][a-z0-9._\-]{0,63}" maxlength="64" autocomplete="off" spellcheck="false"><small data-i18n="fmNameHint"></small></label>
         <label class="fld"><span data-i18n="fmDescription">说明（可选）</span><input name="description" maxlength="500"></label>

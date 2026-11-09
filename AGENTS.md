@@ -31,6 +31,7 @@ src/describe.ts        schedules in words (zh/en); shared with the page, no depe
 src/catalog.ts         overview rows: owner, headless, zone, state; counts; next up
 src/assistant.ts     * prompt, plan parsing, tools, confirmation cards
 src/space.ts           ai-space client (tasks, runs, apps, model)
+src/remote.ts        * one page over several machines: the `ops` capability, the machine list, forwarding to a peer
 src/config.ts          environment, operator credential lookup
 src/testing.ts         in-memory ai-space for tests
 web/index.html         the page shell; app.ts the logic; i18n.ts the zh/en strings; styles.css the look
@@ -39,7 +40,7 @@ deploy/post-receive    bare-repository hook: `space app deploy`
 
 ## API
 
-`GET /api/meta`, `GET /api/overview` (rows, counts, nextUp, spaceError), `GET /api/rows/:key/runs?limit` (any task; a job's kept runs merged), `GET|POST /api/jobs`, `GET|PATCH /api/jobs/:id`, `POST /api/jobs/:id/pause|resume|run|archive|restore`, `POST /api/reconcile`, `POST /api/schedule/preview { schedule, zone }`, `GET|POST /api/assistant { message, zone, lang, session }`, `POST /api/assistant/new`, `POST /api/assistant/confirm { token, accept, lang }`. Errors are `{ ok: false, code, error }`; the page maps `code` to its language.
+`GET /api/meta`, `GET /api/overview` (rows, counts, nextUp, spaceError), `GET /api/rows/:key/runs?limit` (any task; a job's kept runs merged), `GET|POST /api/jobs`, `GET|PATCH /api/jobs/:id`, `POST /api/jobs/:id/pause|resume|run|archive|restore`, `POST /api/reconcile`, `POST /api/schedule/preview { schedule, zone }`, `GET|POST /api/assistant { message, zone, lang, session }`, `POST /api/assistant/new`, `POST /api/assistant/confirm { token, accept, lang }`. Across machines: `GET /api/machines`, `/api/m/:peer/<any route above>`, and `POST /api/remote { method, path, body }` (the `ops` capability, for the bus only). Errors are `{ ok: false, code, error }`; the page maps `code` to its language.
 
 ## Design
 
@@ -49,9 +50,13 @@ Page rules (ai-space docs/app-spec.md#app-pages): full-bleed, zh/en with the 中
 
 ## Deployment
 
-Runs on one machine's ai-space and lists that machine's tasks only: ai-space keeps scheduler, tasks and runs per machine, and peer calls go from the hub to a peer, never back, so an instance cannot read another machine's tasks. Another machine gets its own instance.
+Every machine runs its own instance: ai-space keeps scheduler, tasks and runs per machine, so a job lives and runs on the machine whose instance made it, with that machine's operator credential.
 
-Deploy channel: from this source checkout `git push deploy main`; `deploy` is a bare repository `~/task-shelf.git` whose `post-receive` hook is `deploy/post-receive` (`space app deploy`: checkout, `bun install --frozen-lockfile`, typecheck, tests, sync, restart; a failure keeps the running version). A new app directory needs `space app sync` once. Logs: `space logs task-shelf`.
+One page shows them all. Each instance provides the bus capability `ops` (`POST /api/remote`, `src/remote.ts`): a request for one of its own page routes (an allowlist; no route outside the page), accepted only from this app (`x-space-caller` is `task-shelf` or `<hub>/task-shelf`). The instance whose ai-space has peers running this app lists them (`GET /api/machines`, from `GET /api/capabilities`) and forwards the page's requests for a peer (`/api/m/<peer>/<route>`) as `POST /api/call/<peer>/task-shelf/ops` with its app token; non-GET forwards keep the page's same-origin rule. The page reads every machine's overview side by side, tags rows with their machine, and sends each action, the form and the assistant to the machine it is for. Calls go hub → peer only, so the hub's page is the one that shows everything; every machine sets `SPACE_APP_URL_TASK_SHELF` to the hub's hostname so the panel shows one tile.
+
+On a machine whose workspace `.env` sets `SPACE_API_TOKEN` (no `run/operator-token` file), give the instance the same value in `apps/task-shelf/.env` (mode 600; deploys keep untracked files), or its jobs are read-only.
+
+Deploy channel: from this source checkout `git push <machine> main`; each machine has a bare repository `~/task-shelf.git` whose `post-receive` hook is `deploy/post-receive` (`space app deploy`: checkout, `bun install --frozen-lockfile`, typecheck, tests, sync, restart; a failure keeps the running version). A new app directory needs `space app sync` once. Logs: `space logs task-shelf`.
 
 ## Commands
 

@@ -241,6 +241,8 @@ kbd{font-family:var(--font-mono);font-size:12px;line-height:1;padding:3px 6px;bo
 .assistant{grid-area:as;display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--surface);border-left:1px solid var(--rule)}
 .as-head{display:flex;align-items:center;justify-content:space-between;gap:8px;height:52px;padding:0 12px 0 20px;border-bottom:1px solid var(--rule);flex:none}
 .as-head h2{font-size:16px}
+.mach-pick{margin-right:auto;margin-left:8px;max-width:9em;border:1px solid var(--rule-strong);border-radius:var(--r-btn);background:var(--surface);padding:3px 6px;font-size:13px;color:var(--ink)}
+.mach{font-family:var(--font-mono);font-size:12px;color:var(--muted);border:1px solid var(--rule);border-radius:var(--r-inner);padding:0 4px;margin-right:6px}
 .as-btns{display:flex;align-items:center;gap:2px}
 .as-close{display:none}
 .as-log{flex:1;min-height:0;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
