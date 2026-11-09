@@ -35,10 +35,11 @@ describe("machineFinder", () => {
   test("peers whose ai-space lists this app's ops, asked with the app token", async () => {
     const f = (async (_u: string, init: RequestInit) => (init.headers as Record<string, string>).authorization !== "Bearer t" ? new Response("{}", { status: 401 }) : Response.json({ ok: true, apps: [
       { app: "task-shelf", provides: [{ name: "ops" }] },
-      { app: "task-shelf", peer: "thinkbook", provides: [{ name: "ops" }] },
+      { app: "thinkbook/task-shelf", peer: "thinkbook", provides: [{ name: "ops" }] },
       { app: "task-shelf", peer: "david", provides: [{ name: "ops" }] },
-      { app: "task-shelf", peer: "old", provides: [] },
-      { app: "hive", peer: "x", provides: [{ name: "ops" }] },
+      { app: "old/task-shelf", peer: "old", provides: [] },
+      { app: "x/hive", peer: "x", provides: [{ name: "ops" }] },
+      { app: "y/x/task-shelf", peer: "y", provides: [{ name: "ops" }] },
     ] })) as unknown as typeof fetch;
     expect(await machineFinder({ apiUrl: "http://s", app: "task-shelf", local: "seoul", token: "t", fetch: f })()).toEqual({ local: "seoul", peers: ["david", "thinkbook"], error: null });
   });

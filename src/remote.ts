@@ -53,6 +53,7 @@ export interface Machines {
   error: string | null;
 }
 
+/** A peer's app appears as `<peer>/<app>` with `peer` set. */
 type CapabilityList = { apps?: { app?: string; peer?: string; provides?: unknown }[] };
 
 const provides = (p: unknown, name: string): boolean =>
@@ -70,7 +71,7 @@ export function machineFinder(o: { apiUrl: string; app: string; local: string; t
       const res = await f(`${o.apiUrl}/api/capabilities`, { headers: o.token ? { authorization: `Bearer ${o.token}` } : {}, signal: AbortSignal.timeout(8_000) });
       if (!res.ok) throw new Error(`ai-space answered HTTP ${res.status}`);
       const d = (await res.json()) as CapabilityList;
-      const peers = [...new Set((d.apps ?? []).filter((a) => a.peer && a.app === o.app && provides(a.provides, CAPABILITY)).map((a) => a.peer!))].sort();
+      const peers = [...new Set((d.apps ?? []).filter((a) => a.peer && (a.app === o.app || a.app === `${a.peer}/${o.app}`) && provides(a.provides, CAPABILITY)).map((a) => a.peer!))].sort();
       value = { local: o.local, peers, error: null };
     } catch (e) {
       // Keep the last good list through a short outage; the local machine always works.
