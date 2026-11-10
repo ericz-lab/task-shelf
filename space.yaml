@@ -7,6 +7,7 @@ description: A home for small scheduled jobs that have no app of their own. You 
 icon: icon.png
 url: /?lang={lang}&accent={accent}
 status: active
+repo: https://github.com/ericz-lab/task-shelf.git
 i18n:
   zh:
     title: 定时任务收纳
