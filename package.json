@@ -9,6 +9,7 @@
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "pack": "bun scripts/pack.ts",
     "check": "bun install && bun run typecheck && bun test"
   },
   "devDependencies": {
@@ -17,5 +18,25 @@
   },
   "dependencies": {
     "croner": "^10.0.1"
+  },
+  "spacePackage": {
+    "include": [
+      "src",
+      "web",
+      "icon.png",
+      "package.json",
+      "tsconfig.json",
+      "node_modules/croner"
+    ],
+    "mode": "on-demand",
+    "offline": {
+      "features": [
+        "List, create, edit, pause, resume and run this machine's jobs"
+      ],
+      "online": [
+        "The AI assistant",
+        "Jobs on other machines"
+      ]
+    }
   }
 }
