@@ -20,6 +20,8 @@
 .th { display:none }
 :root[data-mode="system"] .th-system,:root[data-mode="light"] .th-light,:root[data-mode="dark"] .th-dark { display:block }
 .sp-banner > .ic { margin-top:3px }
+/* the app's own icon in the brand (kit .sp-logo gives the size and radius; the picture carries its own plate) */
+.app-logo { display:block;background:none;object-fit:cover }
 
 /* ---- heading: the view, then enabled count, next run, machine */
 .head-title { display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 20px;min-width:0 }
