@@ -45,6 +45,8 @@ const S = {
   tab: (params.get("tab") === "archived" ? "archived" : "jobs") as "jobs" | "archived",
   filter: (["failing", "paused", "running"].includes(params.get("f") ?? "") ? params.get("f") : null) as null | "failing" | "paused" | "running",
   q: params.get("q") ?? "",
+  /** The machine the list is narrowed to ("" for this machine), or null for all. */
+  machine: params.get("m"),
   sel: params.get("sel"),
   rows: [] as Row[],
   counts: null as Counts | null,
@@ -69,6 +71,7 @@ function writeUrl() {
   if (S.tab !== "jobs") p.set("tab", S.tab);
   if (S.filter) p.set("f", S.filter);
   if (S.q) p.set("q", S.q);
+  if (S.machine !== null) p.set("m", S.machine);
   if (S.sel) p.set("sel", S.sel);
   if (params.get("lang")) p.set("lang", S.lang);
   const qs = p.toString();
@@ -137,17 +140,20 @@ function appLabel(r: Row): string {
   return r.appTitle ? r.appTitle[S.lang] : r.app;
 }
 
-function statusOf(r: Row): { cls: string; text: string } {
+/** A row's state as a kit class (ok, run, bad, off, none) and its word: a colour always comes with a word. */
+function statusOf(r: Row): { cls: "ok" | "run" | "bad" | "off" | "none"; text: string } {
   if (r.archived) return { cls: "off", text: t("stArchived") };
   if (r.orphaned) return { cls: "off", text: t("stOrphaned") };
-  if (!r.registered) return { cls: "err", text: t("stUnregistered") };
-  if (r.running) return { cls: "live", text: t("stRunning") };
+  if (!r.registered) return { cls: "bad", text: t("stUnregistered") };
+  if (r.running) return { cls: "run", text: t("stRunning") };
   if (!r.enabled) return { cls: "off", text: t("stPaused") };
-  if (r.lastStatus === "error") return { cls: "err", text: r.consecutiveErrors > 1 ? t("stErrorN", { n: r.consecutiveErrors }) : t("stError") };
-  if (r.lastStatus === "skipped") return { cls: "skip", text: t("stSkipped") };
+  if (r.lastStatus === "error") return { cls: "bad", text: r.consecutiveErrors > 1 ? t("stErrorN", { n: r.consecutiveErrors }) : t("stError") };
+  if (r.lastStatus === "skipped") return { cls: "off", text: t("stSkipped") };
   if (r.lastStatus === "ok") return { cls: "ok", text: t("stOk") };
-  return { cls: "never", text: t("stNever") };
+  return { cls: "none", text: t("stNever") };
 }
+const badge = (cls: string, text: string) => `<span class="sp-badge ${cls}">${esc(text)}</span>`;
+const icon = (id: string) => `<svg class="ic" aria-hidden="true"><use href="#${id}"/></svg>`;
 
 function scheduleCell(r: Row): string {
   if (!r.schedule) return "";
@@ -159,13 +165,18 @@ function scheduleCell(r: Row): string {
   return `<span class="sched-words">${esc(words)}${esc(trig)}</span><span class="mono sched-raw"${title}>${[raw, zone].filter(Boolean).map(esc).join(" · ")}</span>`;
 }
 
+/** The machine filter, when it names a machine the page knows. */
+const machineFilter = () => (S.machine !== null && multi() && machineOf(S.machine) ? S.machine : null);
+const inMachine = (r: Row) => { const m = machineFilter(); return m === null || r.via === m; };
+const inScope = (r: Row, tab = S.tab) => (tab === "archived") === r.archived && inMachine(r);
+const matches = (r: Row, f: typeof S.filter) =>
+  f === "failing" ? (r.enabled && r.lastStatus === "error") || (!r.registered && !r.archived) : f === "paused" ? !r.enabled : f === "running" ? r.running : true;
+
 function visibleRows(): Row[] {
   const q = S.q.trim().toLowerCase();
   return S.rows.filter((r) => {
-    if ((S.tab === "archived") !== r.archived) return false;
-    if (S.filter === "failing" && !((r.enabled && r.lastStatus === "error") || (!r.registered && !r.archived))) return false;
-    if (S.filter === "paused" && r.enabled) return false;
-    if (S.filter === "running" && !r.running) return false;
+    if (!inScope(r)) return false;
+    if (!matches(r, S.filter)) return false;
     if (q && ![r.name, nameOf(r.via), r.app, r.appTitle?.zh, r.appTitle?.en, r.description, r.target.text].some((x) => (x ?? "").toLowerCase().includes(q))) return false;
     return true;
   });
@@ -173,9 +184,15 @@ function visibleRows(): Row[] {
 
 /** The last run's outcome, whatever the task's state now. */
 function lastPill(r: Row): string {
-  if (r.lastStatus === "error") return `<span class="pill err">${esc(r.consecutiveErrors > 1 ? t("stErrorN", { n: r.consecutiveErrors }) : t("stError"))}</span>`;
-  if (r.lastStatus === "skipped") return `<span class="pill skip">${esc(t("stSkipped"))}</span>`;
-  return `<span class="pill ok"><svg class="ic"><use href="#i-check"/></svg>${esc(t("stOk"))}</span>`;
+  if (r.lastStatus === "error") return badge("bad", r.consecutiveErrors > 1 ? t("stErrorN", { n: r.consecutiveErrors }) : t("stError"));
+  if (r.lastStatus === "skipped") return badge("off", t("stSkipped"));
+  return badge("ok", t("stOk"));
+}
+
+/** Under a task's name: its description; for a task this app does not own, whose it is first. */
+function meta(r: Row): string {
+  if (r.owner === "mine") return r.description;
+  return [appLabel(r), r.headless ? t("headlessTag") : "", r.description].filter(Boolean).join(" · ");
 }
 
 function rowHtml(r: Row): string {
@@ -186,65 +203,80 @@ function rowHtml(r: Row): string {
   const via = ` data-via="${esc(r.via)}"`;
   const next = !r.enabled ? `<span class="rel dim">${esc(t("stPaused"))}</span>` : r.nextRunAt ? `<span class="rel">${esc(relTime(r.nextRunAt))}</span><span class="abs mono">${esc(absTime(r.nextRunAt))}</span>` : `<span class="rel dim">${t("noNext")}</span>`;
   const last = r.running
-    ? `<span class="pill live">${esc(t("stRunning"))}</span>`
+    ? badge("run", t("stRunning"))
     : r.lastRunAt
       ? `<span class="rel">${esc(relTime(r.lastRunAt))}</span><span class="last-line">${lastPill(r)}${r.lastDurationMs !== null ? `<span class="mono dim">${esc(runDuration(r.lastDurationMs))}</span>` : ""}</span>`
       : `<span class="rel dim">${esc(t("stNever"))}</span>`;
   const toggle = mine && !r.archived
-    ? `<label class="switch"><input type="checkbox" data-act="toggle" data-id="${r.jobId}"${via} ${r.enabled ? "checked" : ""} ${canAct && r.registered ? "" : "disabled"} aria-label="${esc(t("toggleAria", { name: r.name }))}"><span aria-hidden="true"></span></label>`
-    : mine ? `<span class="lock">${esc(t("stArchived"))}</span>` : `<span class="lock" title="${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}"><svg class="ic"><use href="#i-lock"/></svg><span>${esc(t("readOnly"))}</span></span>`;
+    ? `<label class="sp-switch"><input type="checkbox" role="switch" data-act="toggle" data-id="${r.jobId}"${via} ${r.enabled ? "checked" : ""} ${canAct && r.registered ? "" : "disabled"} aria-label="${esc(t("toggleAria", { name: r.name }))}"><span class="sp-track" aria-hidden="true"></span></label>`
+    : mine ? `<span class="lock">${esc(t("stArchived"))}</span>` : `<span class="lock" title="${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}">${icon("i-lock")}<span>${esc(t("readOnly"))}</span></span>`;
   const actions = canAct && r.registered
-    ? `<button type="button" class="icon-btn" data-act="run" data-id="${r.jobId}"${via} title="${esc(t("runNow"))}" aria-label="${esc(t("runNow"))} ${esc(r.name)}"><svg class="ic"><use href="#i-play"/></svg></button><button type="button" class="icon-btn" data-act="edit" data-id="${r.jobId}"${via} title="${esc(t("edit"))}" aria-label="${esc(t("edit"))} ${esc(r.name)}"><svg class="ic"><use href="#i-edit"/></svg></button>`
-    : canAct && !r.registered ? `<button type="button" class="btn btn-sm" data-act="reconcile"${via}>${esc(t("reregister"))}</button>`
-    : mine && r.archived && writable ? `<button type="button" class="btn btn-sm" data-act="restore" data-id="${r.jobId}"${via}>${esc(t("restore"))}</button>` : "";
-  return `<div class="row ${st.cls}${S.sel === r.uid ? " sel" : ""}${r.enabled && !r.orphaned ? "" : " muted"}" role="row" data-key="${esc(r.uid)}" tabindex="0" aria-selected="${S.sel === r.uid}">
-    <div class="c-name" role="cell"><span class="dot ${st.cls}" title="${esc(st.text)}"></span><span class="nm"><b>${esc(r.name)}</b><span class="meta" title="${esc(r.app)}">${multi() ? `<span class="mach">${esc(nameOf(r.via))}</span>` : ""}${esc(appLabel(r))}${r.headless && !mine ? ` · ${esc(t("headlessTag"))}` : ""}</span>${r.syncError && mine ? `<span class="warn">${esc(r.syncError)}</span>` : ""}</span></div>
-    <div class="c-sched" role="cell">${scheduleCell(r)}</div>
-    <div class="c-next" role="cell"><span class="cell-label">${esc(t("colNext"))}</span>${next}</div>
-    <div class="c-last" role="cell"><span class="cell-label">${esc(t("colLast"))}</span>${last}</div>
-    <div class="c-on" role="cell">${toggle}</div>
-    <div class="c-act" role="cell">${actions}</div>
-  </div>`;
+    ? `<button type="button" class="sp-icon-btn" data-act="run" data-id="${r.jobId}"${via} title="${esc(t("runNow"))}" aria-label="${esc(t("runNow"))} ${esc(r.name)}">${icon("i-play")}</button><button type="button" class="sp-icon-btn" data-act="edit" data-id="${r.jobId}"${via} title="${esc(t("edit"))}" aria-label="${esc(t("edit"))} ${esc(r.name)}">${icon("i-edit")}</button>`
+    : canAct && !r.registered ? `<button type="button" class="sp-btn sm" data-act="reconcile"${via}>${esc(t("reregister"))}</button>`
+    : mine && r.archived && writable ? `<button type="button" class="sp-btn sm" data-act="restore" data-id="${r.jobId}"${via}>${esc(t("restore"))}</button>` : "";
+  const dot = st.cls === "off" ? "" : ` ${st.cls}`;
+  return `<tr class="row${r.enabled && !r.orphaned ? "" : " muted"}" data-key="${esc(r.uid)}" tabindex="0" aria-selected="${S.sel === r.uid}">
+    <td class="c-name"><span class="sp-dot${dot}" title="${esc(st.text)}"></span><span class="nm"><span class="nm-line"><b>${esc(r.name)}</b>${multi() ? `<span class="sp-chip mono mach">${esc(nameOf(r.via))}</span>` : ""}</span>${meta(r) ? `<span class="meta" title="${esc(r.app)}">${esc(meta(r))}</span>` : ""}${r.syncError && mine ? `<span class="warn">${esc(r.syncError)}</span>` : ""}</span></td>
+    <td class="c-sched">${scheduleCell(r)}</td>
+    <td class="c-next"><span class="cell-label">${esc(t("colNext"))}</span>${next}</td>
+    <td class="c-last"><span class="cell-label">${esc(t("colLast"))}</span>${last}</td>
+    <td class="c-on">${toggle}</td>
+    <td class="c-act">${actions}</td>
+  </tr>`;
 }
 
+/** The heading: the view's name, then what the navigation and the filters do not show (enabled, next run, machine). */
 function renderSummary() {
   const c = S.counts;
+  $("#view-title").textContent = t(S.tab === "archived" ? "tabArchived" : "tabJobs");
   const parts: string[] = [];
   if (c) {
-    parts.push(`<span><b class="num">${c.total}</b> ${esc(t("sumTasks", { n: "" }).trim())}</span>`);
-    parts.push(`<span><b class="num">${c.enabled}</b> ${esc(t("sumEnabled", { n: "" }).trim())}</span>`);
-    if (c.failing) parts.push(`<span class="err"><b class="num">${c.failing}</b> ${esc(t("sumFailing", { n: "" }).trim())}</span>`);
-    if (c.running) parts.push(`<span class="live"><b class="num">${c.running}</b> ${esc(t("sumRunning", { n: "" }).trim())}</span>`);
-    if (S.nextUp) parts.push(`<span>${esc(t("sumNext", { time: clock(S.nextUp.nextRunAt), name: `${S.nextUp.owner === "mine" ? "" : `${S.nextUp.app}/`}${S.nextUp.name}` }))}</span>`);
-    if (multi()) parts.push(`<span class="mono dim" title="${esc(S.machines.map((m) => m.name).join(", "))}">${esc(t("sumMachines", { n: S.machines.length }))}</span>`);
-    else if (S.machines[0]?.name) parts.push(`<span class="mono dim">${esc(t("sumMachine", { name: S.machines[0].name }))}</span>`);
+    parts.push(`<span class="sp-stat"><span class="sp-fig">${c.enabled}</span><span class="sp-unit">${esc(t("sumEnabled", { n: "" }).trim())}</span></span>`);
+    if (S.nextUp) parts.push(`<span class="sum-next">${esc(t("sumNext", { time: clock(S.nextUp.nextRunAt), name: `${S.nextUp.owner === "mine" ? "" : `${S.nextUp.app}/`}${S.nextUp.name}` }))}</span>`);
+    if (!multi() && S.machines[0]?.name) parts.push(`<span class="mono dim">${esc(t("sumMachine", { name: S.machines[0].name }))}</span>`);
   }
-  $("#sum").innerHTML = parts.join('<i class="sep" aria-hidden="true">·</i>');
+  $("#sum").innerHTML = parts.join("");
   const ro = S.machines.filter((m) => !m.writable && !m.error);
-  const banner = $("#ro-banner");
-  banner.hidden = !ro.length;
-  if (ro.length) banner.textContent = multi() ? ro.map((m) => t("readOnlyOn", { name: m.name })).join(" ") : t("readOnlyBanner");
+  $("#ro-banner").hidden = !ro.length;
+  $("#ro-text").textContent = ro.length ? (multi() ? ro.map((m) => t("readOnlyOn", { name: m.name })).join(" ") : t("readOnlyBanner")) : "";
 }
 
+/** The left column (views, machines) and the status filters, with their counts. */
 function renderTabs() {
-  const c = S.counts;
-  void c;
-  const n = { jobs: S.rows.filter((r) => !r.archived).length, archived: S.rows.filter((r) => r.archived).length };
+  const n = { jobs: S.rows.filter((r) => inScope(r, "jobs")).length, archived: S.rows.filter((r) => inScope(r, "archived")).length };
   for (const b of $$("[data-tab]")) {
     const k = b.dataset.tab as keyof typeof n;
     b.setAttribute("aria-pressed", String(S.tab === k));
     $(".n", b).textContent = String(n[k]);
   }
-  for (const b of $$("[data-f]")) b.setAttribute("aria-pressed", String(S.filter === b.dataset.f));
+  const scoped = S.rows.filter((r) => inScope(r));
+  for (const b of $$("[data-f]")) {
+    const f = (b.dataset.f || null) as typeof S.filter;
+    b.setAttribute("aria-pressed", String(S.filter === f));
+    const count = b.querySelector(".n");
+    if (count) count.textContent = String(scoped.filter((r) => matches(r, f)).length);
+  }
+  const group = $("#machine-group");
+  group.hidden = !multi();
+  if (multi()) {
+    const m = machineFilter();
+    const item = (via: string | null, label: string, mono: boolean, error: string | null) =>
+      `<li><button type="button" class="sp-nitem" data-machine="${via === null ? "*" : esc(via)}" aria-pressed="${m === via}"><span class="${mono ? "mono" : ""}">${esc(label)}</span>${error ? `<span class="sp-dot bad" title="${esc(error)}"></span>` : ""}</button></li>`;
+    const html = item(null, t("navAll"), false, null) + S.machines.map((x) => item(x.via, x.name, true, x.error)).join("");
+    const list = $("#machine-nav");
+    if (list.dataset.html !== html) { list.innerHTML = html; list.dataset.html = html; }
+  }
 }
 
 function renderList() {
   const list = $("#rows");
   const state = $("#list-state");
+  const foot = $("#list-foot");
   if (!S.loaded) {
     state.dataset.state = "loading";
-    state.innerHTML = Array.from({ length: 6 }, () => '<div class="skel"><i></i><i></i><i></i><i></i></div>').join("");
+    state.innerHTML = Array.from({ length: 5 }, () => '<div class="skel"><i class="sp-sk"></i><i class="sp-sk"></i><i class="sp-sk"></i><i class="sp-sk"></i></div>').join("");
     list.innerHTML = "";
+    foot.hidden = true;
     return;
   }
   const rows = visibleRows();
@@ -252,19 +284,19 @@ function renderList() {
   if (S.loadError || down.length) {
     state.dataset.state = "error";
     const msg = S.loadError ? t("errorList", { error: S.loadError }) : multi() ? down.map((m) => t("machinesDown", { names: m.name, error: m.error! })).join(" ") : t("errorList", { error: down[0]!.error! });
-    state.innerHTML = `<p>${esc(msg)}</p><button type="button" class="btn btn-sm" data-act="reload">${esc(t("retry"))}</button>`;
+    state.innerHTML = `<div class="sp-banner bad">${icon("i-x")}<span class="grow">${esc(msg)}</span><button type="button" class="sp-btn sm" data-act="reload">${esc(t("retry"))}</button></div>`;
   } else if (!rows.length) {
     state.dataset.state = "empty";
     const plain = !S.q && !S.filter;
-    state.innerHTML = `<p>${esc(plain ? t(S.tab === "archived" ? "emptyArchived" : "emptyMine") : t("emptyFilter"))}</p>${S.tab === "jobs" && S.machines.some((m) => m.writable) ? `<button type="button" class="btn btn-sm btn-primary" data-act="new">${esc(t("newJob"))}</button>` : ""}`;
+    state.innerHTML = `<div class="sp-state"><p>${esc(plain ? t(S.tab === "archived" ? "emptyArchived" : "emptyMine") : t("emptyFilter"))}</p>${S.tab === "jobs" && S.machines.some((m) => m.writable) ? `<button type="button" class="sp-btn" data-act="new">${icon("i-plus")}<span>${esc(t("newJob"))}</span></button>` : ""}</div>`;
   } else {
     state.dataset.state = "";
     state.innerHTML = "";
   }
   list.innerHTML = rows.map(rowHtml).join("");
-  const foot = $("#list-foot");
+  list.closest("table")!.hidden = !rows.length;
   foot.hidden = !rows.length;
-  foot.textContent = t("shownOf", { n: rows.length, total: S.rows.filter((r) => (S.tab === "archived") === r.archived).length });
+  foot.textContent = t("shownOf", { n: rows.length, total: S.rows.filter((r) => inScope(r)).length });
 }
 
 // ---------------------------------------------------------------- detail
@@ -282,42 +314,42 @@ async function renderDetail() {
   const via = ` data-via="${esc(r.via)}"`;
   const src = mine ? t("dSourceMine", { id: r.taskId ?? "—" }) : r.owner === "system" ? t("dSourceSystem") : t("dSourceApp", { app: r.app });
   const zone = r.zone ? (r.zoneDeclared ? r.zone : t("zoneMachine", { zone: r.zone })) : "—";
-  const icon = (id: string) => `<svg class="ic"><use href="#${id}"/></svg>`;
   const btns = mine
     ? r.archived
-      ? (writable ? `<button type="button" class="btn btn-secondary" data-act="restore" data-id="${r.jobId}"${via}>${esc(t("restore"))}</button>` : "")
-      : `<button type="button" class="btn btn-secondary" data-act="run" data-id="${r.jobId}"${via} ${canAct ? "" : "disabled"}>${icon("i-play")}<span>${esc(t("runNow"))}</span></button>
-         <button type="button" class="btn btn-secondary" data-act="${r.enabled ? "pause" : "resume"}" data-id="${r.jobId}"${via} ${canAct ? "" : "disabled"}>${icon(r.enabled ? "i-pause" : "i-play")}<span>${esc(r.enabled ? t("pause") : t("resume"))}</span></button>
-         <button type="button" class="btn btn-secondary" data-act="edit" data-id="${r.jobId}"${via} ${writable ? "" : "disabled"}>${icon("i-edit")}<span>${esc(t("edit"))}</span></button>
-         <button type="button" class="btn btn-ghost btn-del" data-act="delete" data-id="${r.jobId}"${via} ${writable ? "" : "disabled"}>${icon("i-trash")}<span>${esc(t("del"))}</span></button>`
+      ? (writable ? `<button type="button" class="sp-btn" data-act="restore" data-id="${r.jobId}"${via}>${esc(t("restore"))}</button>` : "")
+      : `<button type="button" class="sp-btn" data-act="run" data-id="${r.jobId}"${via} ${canAct ? "" : "disabled"}>${icon("i-play")}<span>${esc(t("runNow"))}</span></button>
+         <button type="button" class="sp-btn" data-act="${r.enabled ? "pause" : "resume"}" data-id="${r.jobId}"${via} ${canAct ? "" : "disabled"}>${icon(r.enabled ? "i-pause" : "i-play")}<span>${esc(r.enabled ? t("pause") : t("resume"))}</span></button>
+         <button type="button" class="sp-btn" data-act="edit" data-id="${r.jobId}"${via} ${writable ? "" : "disabled"}>${icon("i-edit")}<span>${esc(t("edit"))}</span></button>
+         <button type="button" class="sp-btn" data-act="delete" data-id="${r.jobId}"${via} ${writable ? "" : "disabled"}>${icon("i-trash")}<span>${esc(t("del"))}</span></button>`
     : `<span class="lock">${icon("i-lock")}<span>${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}</span></span>`;
   const st = statusOf(r);
-  const pill = st.cls === "err" ? "err" : st.cls === "live" ? "live" : st.cls === "ok" ? "" : "skip";
   const keep = detailFor === r.uid ? $("#d-runs", box)?.innerHTML : "";
   const words = r.schedule ? scheduleText(r.schedule.kind === "at" ? { ...r.schedule, tz: r.zone ?? undefined } : r.schedule, S.lang) : "—";
-  const fact = (label: string, value: string, mono = false, title = "") => `<div><dt>${esc(label)}</dt><dd${mono ? ' class="mono"' : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd></div>`;
-  box.innerHTML = `<header class="d-head"><div class="d-title"><h2>${esc(r.name)}</h2>${pill ? `<span class="pill ${pill}">${esc(st.text)}</span>` : ""}</div><div class="d-btns">${btns}<button type="button" class="icon-btn" data-act="close-detail" aria-label="${esc(t("close"))}" title="${esc(t("close"))}">${icon("i-x")}</button></div></header>
+  const fact = (label: string, value: string, mono = false, title = "") => `<dt>${esc(label)}</dt><dd${mono ? ' class="mono"' : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd>`;
+  box.innerHTML = `<header class="d-head"><div class="d-title"><h2 class="sp-tt"><span class="sp-sq" aria-hidden="true"></span><span class="mono">${esc(r.name)}</span></h2>${st.cls === "none" ? "" : badge(st.cls, st.text)}</div><div class="d-btns">${btns}<button type="button" class="sp-icon-btn" data-act="close-detail" aria-label="${esc(t("close"))}" title="${esc(t("close"))}">${icon("i-x")}</button></div></header>
     ${r.description ? `<p class="d-desc">${esc(r.description)}</p>` : ""}
-    <pre class="code${r.target.kind === "command" ? " cmd" : ""}" aria-label="${esc(t("dTarget"))}">${esc(r.target.text)}</pre>
-    <dl class="facts">
-      ${fact(t("colSchedule"), esc(words) + (r.triggers ? ` · ${esc(t("triggersN", { n: r.triggers }))}` : ""))}
-      ${r.schedule?.kind === "cron" ? fact("Cron", esc(r.schedule.expr), true) : ""}
-      ${fact(t("dZone"), esc(zone), true, r.zone && !r.zoneDeclared ? t("zoneMachineTitle", { zone: r.zone }) : "")}
-      ${r.timeoutMs ? fact(t("dTimeout"), esc(durationText(r.timeoutMs, S.lang)), true) : ""}
-      ${multi() ? fact(t("fmMachine"), esc(nameOf(r.via)), true) : ""}
-      ${fact(t("dSource"), esc(src))}
-      ${fact(t("dKind"), esc(t(`kind_${r.target.kind}`)))}
-    </dl>
-    ${r.lastError ? `<p class="d-err"><b>${esc(t("stError"))}</b> <span class="mono">${esc(r.lastError)}</span></p>` : ""}
-    <section class="d-sec"><h3>${esc(t("dRuns"))} <span>${esc(t("dRunsLast", { n: 10 }))}</span></h3><div id="d-runs" class="runs">${keep || `<p class="dim">${esc(t("loading"))}</p>`}</div></section>
-    ${mine ? `<section class="d-sec"><h3>${esc(t("dChanges"))}</h3><ol id="d-changes" class="changes"></ol></section>` : ""}`;
+    <div class="d-grid">
+      <pre class="sp-code${r.target.kind === "command" ? " cmd" : ""}" aria-label="${esc(t("dTarget"))}">${esc(r.target.text)}</pre>
+      <dl class="sp-facts">
+        ${fact(t("colSchedule"), esc(words) + (r.triggers ? ` · ${esc(t("triggersN", { n: r.triggers }))}` : ""))}
+        ${r.schedule?.kind === "cron" ? fact("Cron", esc(r.schedule.expr), true) : ""}
+        ${fact(t("dZone"), esc(zone), true, r.zone && !r.zoneDeclared ? t("zoneMachineTitle", { zone: r.zone }) : "")}
+        ${r.timeoutMs ? fact(t("dTimeout"), esc(durationText(r.timeoutMs, S.lang)), true) : ""}
+        ${multi() ? fact(t("fmMachine"), esc(nameOf(r.via)), true) : ""}
+        ${fact(t("dSource"), esc(src))}
+        ${fact(t("dKind"), esc(t(`kind_${r.target.kind}`)))}
+      </dl>
+    </div>
+    ${r.lastError ? `<div class="sp-banner bad d-err">${icon("i-x")}<span class="grow"><b>${esc(t("stError"))}</b> <span class="mono">${esc(r.lastError)}</span></span></div>` : ""}
+    <section class="d-sec"><h3 class="d-sec-h"><span>${esc(t("dRuns"))}</span><span class="sp-small sp-muted">${esc(t("dRunsLast", { n: 10 }))}</span></h3><div id="d-runs" class="runs">${keep || `<p class="dim">${esc(t("loading"))}</p>`}</div></section>
+    ${mine ? `<section class="d-sec"><h3 class="d-sec-h"><span>${esc(t("dChanges"))}</span></h3><ol id="d-changes" class="changes"></ol></section>` : ""}`;
   detailFor = r.uid;
   const key = r.uid;
   try {
     const { runs } = await api<{ runs: Run[] }>(on(r.via, `/api/rows/${encodeURIComponent(r.key)}/runs?limit=10`));
     if (S.sel !== key) return;
     const longest = Math.max(1, ...runs.map((x) => x.endedAt - x.startedAt));
-    $("#d-runs", box).innerHTML = runs.length ? runs.map((x) => runHtml(x, longest)).join("") : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
+    $("#d-runs", box).innerHTML = runs.length ? runsTable(runs, longest) : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
   } catch (e) {
     if (S.sel === key) $("#d-runs", box).innerHTML = `<p class="err-text">${esc(errText(e))}</p>`;
   }
@@ -331,12 +363,17 @@ async function renderDetail() {
   }
 }
 
+function runsTable(runs: Run[], longest: number): string {
+  const head = ["rTime", "rTrigger", "rResult", "rDuration", "rOutput"].map((k) => `<th scope="col">${esc(t(k))}</th>`).join("");
+  return `<table class="sp-table rt"><thead><tr>${head}</tr></thead><tbody>${runs.map((x) => runHtml(x, longest)).join("")}</tbody></table>`;
+}
+
 function runHtml(r: Run, longest: number): string {
-  const cls = r.status === "ok" ? "ok" : r.status === "error" ? "err" : "skip";
+  const cls = r.status === "ok" ? "ok" : r.status === "error" ? "bad" : "off";
   const first = (r.error || r.output || "").split("\n").find((l) => l.trim()) ?? "";
   const ms = Math.max(0, r.endedAt - r.startedAt);
-  const pill = r.status === "ok" ? `<span class="pill ok"><svg class="ic"><use href="#i-check"/></svg>${esc(t("stOk"))}</span>` : `<span class="pill ${cls}">${esc(t(r.status === "error" ? "stError" : "stSkipped"))}</span>`;
-  return `<div class="run ${cls}"><span class="t mono">${esc(absTime(r.startedAt))}</span><span class="k">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</span><span class="s">${pill}</span><span class="rbar"><span class="track"><span class="fill" style="width:${Math.max(2, Math.round((ms / longest) * 100))}%"></span></span><span class="dur mono">${esc(runDuration(ms))}</span></span><code class="out" title="${esc((r.error || r.output || "").slice(0, 2000))}">${esc(first.slice(0, 240))}</code></div>`;
+  const pill = badge(cls, t(r.status === "ok" ? "stOk" : r.status === "error" ? "stError" : "stSkipped"));
+  return `<tr class="run ${cls}"><td class="t">${esc(absTime(r.startedAt))}</td><td class="k">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</td><td class="s">${pill}</td><td class="d"><span class="rbar"><span class="sp-meter${cls === "bad" ? " bad" : ""}" style="--v:${Math.max(2, Math.round((ms / longest) * 100))}%"><i></i></span><span class="dur">${esc(runDuration(ms))}</span></span></td><td class="out mono" title="${esc((r.error || r.output || "").slice(0, 2000))}">${esc(first.slice(0, 240))}</td></tr>`;
 }
 
 // ---------------------------------------------------------------- loading
@@ -386,8 +423,8 @@ function render() {
 function toast(text: string, err = false) {
   const el = $("#toast");
   el.textContent = text;
-  el.className = `toast show${err ? " err" : ""}`;
-  setTimeout(() => { el.className = "toast"; }, 3200);
+  el.className = `sp-toast show${err ? " err" : ""}`;
+  setTimeout(() => { el.className = "sp-toast"; }, 3200);
 }
 
 // ---------------------------------------------------------------- actions
@@ -572,26 +609,27 @@ function openDelete(id: number, via: string) {
 // ---------------------------------------------------------------- the assistant
 
 function chipHtml(a: ActionResult): string {
-  return `<li class="chip ${a.ok ? "ok" : "err"}"><svg class="ic"><use href="#${a.ok ? "i-check" : "i-x"}"/></svg><span>${esc(a.summary)}</span>${a.error ? `<span class="chip-err">${esc(a.error)}</span>` : ""}</li>`;
+  return `<li class="act ${a.ok ? "ok" : "bad"}">${icon(a.ok ? "i-check" : "i-x")}<span>${esc(a.summary)}</span>${a.error ? `<span class="act-err">${esc(a.error)}</span>` : ""}</li>`;
 }
 
 function confirmHtml(m: Message): string {
   const c = m.confirm!;
   if (c.state === "open") {
-    return `<div class="confirm" data-token="${esc(c.token)}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><div class="confirm-btns"><button type="button" class="btn btn-primary btn-sm" data-act="confirm-yes">${esc(t("asConfirmYes"))}</button><button type="button" class="btn btn-ghost btn-sm" data-act="confirm-no">${esc(t("asConfirmNo"))}</button></div></div>`;
+    return `<div class="sp-draft confirm" data-token="${esc(c.token)}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><div class="confirm-btns"><button type="button" class="sp-btn-danger sm" data-act="confirm-yes">${esc(t("asConfirmYes"))}</button><button type="button" class="sp-btn sm" data-act="confirm-no">${esc(t("asConfirmNo"))}</button></div></div>`;
   }
   const label = c.state === "done" ? t("asConfirmDone") : c.state === "declined" ? t("asConfirmDeclined") : t("asConfirmFailed");
-  return `<div class="confirm closed ${c.state}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p><span class="pill ${c.state === "done" ? "ok" : c.state === "failed" ? "err" : "skip"}">${esc(label)}</span></div>`;
+  return `<div class="sp-draft confirm closed ${c.state}"><p>${esc(t("asConfirmQ", { name: c.name }))}</p>${badge(c.state === "done" ? "ok" : c.state === "failed" ? "bad" : "off", label)}</div>`;
 }
 
 function renderChat() {
   const log = $("#as-log");
   const msgs = S.messages.map((m) => m.role === "user"
-    ? `<div class="msg me"><span class="sr">${esc(t("asYou"))}</span><p>${esc(m.text)}</p></div>`
-    : `<div class="msg bot"><span class="sr">${esc(t("asBot"))}</span><p>${esc(m.text)}</p>${m.actions.length ? `<ul class="chips">${m.actions.map(chipHtml).join("")}</ul>` : ""}${m.confirm ? confirmHtml(m) : ""}</div>`);
-  const hello = `<div class="msg bot hello"><span class="sr">${esc(t("asBot"))}</span><p>${esc(S.assistantOn ? t("asHello") : t("asUnavailable"))}</p></div>`;
-  log.innerHTML = hello + msgs.join("") + (S.thinking ? `<div class="msg bot thinking"><span class="sr">${esc(t("asBot"))}</span><p><span class="pulse"></span>${esc(t("asThinking"))}</p></div>` : "");
-  log.scrollTop = log.scrollHeight;
+    ? `<div class="sp-msg-me"><span class="sp-sr">${esc(t("asYou"))}</span><p>${esc(m.text)}</p></div>`
+    : `<div class="msg bot"><span class="sp-sr">${esc(t("asBot"))}</span><p>${esc(m.text)}</p>${m.actions.length ? `<ul class="acts">${m.actions.map(chipHtml).join("")}</ul>` : ""}${m.confirm ? confirmHtml(m) : ""}</div>`);
+  const hello = `<div class="msg bot hello"><span class="sp-sr">${esc(t("asBot"))}</span><p>${esc(S.assistantOn ? t("asHello") : t("asUnavailable"))}</p></div>`;
+  log.innerHTML = hello + msgs.join("") + (S.thinking ? `<div class="msg bot thinking"><span class="sp-sr">${esc(t("asBot"))}</span><p><span class="pulse"></span>${esc(t("asThinking"))}</p></div>` : "");
+  const scroller = $("#as-scroll");
+  scroller.scrollTop = scroller.scrollHeight;
   $<HTMLButtonElement>("#as-send").disabled = S.thinking || !S.assistantOn;
 }
 
@@ -669,8 +707,14 @@ for (const b of $$("[data-lang]")) b.addEventListener("click", () => { S.lang = 
 $("#theme").addEventListener("click", cycleTheme);
 $<HTMLInputElement>("#q").value = S.q;
 $("#q").addEventListener("input", (e) => { S.q = (e.target as HTMLInputElement).value; writeUrl(); renderList(); });
-for (const b of $$("[data-tab]")) b.addEventListener("click", () => { S.tab = b.dataset.tab as typeof S.tab; writeUrl(); render(); });
-for (const b of $$("[data-f]")) b.addEventListener("click", () => { S.filter = S.filter === b.dataset.f ? null : (b.dataset.f as typeof S.filter); writeUrl(); render(); });
+for (const b of $$("[data-tab]")) b.addEventListener("click", () => { S.tab = b.dataset.tab as typeof S.tab; writeUrl(); render(); closeDrawers(); });
+for (const b of $$("[data-f]")) b.addEventListener("click", () => { S.filter = (b.dataset.f || null) as typeof S.filter; writeUrl(); render(); });
+$("#machine-nav").addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLElement>("[data-machine]");
+  if (!b) return;
+  S.machine = b.dataset.machine === "*" ? null : b.dataset.machine!;
+  writeUrl(); render(); closeDrawers();
+});
 
 document.addEventListener("click", async (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
@@ -696,8 +740,9 @@ document.addEventListener("click", async (e) => {
         return;
       }
       case "preset": return void send(el.textContent ?? "");
-      case "as-open": document.body.classList.add("as-open"); return $("#as-input").focus();
-      case "as-close": return document.body.classList.remove("as-open");
+      case "as-open": openDrawer("sp-open-aside"); return $("#as-input").focus();
+      case "nav-open": openDrawer("sp-open-nav"); return $("#q").focus();
+      case "drawer-close": return closeDrawers();
       case "as-new": {
         try { const r = await api<{ session: number }>(on(S.chatVia, "/api/assistant/new"), { body: {} }); S.session = r.session; S.messages = []; renderChat(); } catch (err) { toast(errText(err), true); }
         return;
@@ -708,6 +753,16 @@ document.addEventListener("click", async (e) => {
   const row = (e.target as HTMLElement).closest<HTMLElement>(".row[data-key]");
   if (row && !(e.target as HTMLElement).closest("label, button, input")) { S.sel = S.sel === row.dataset.key ? null : row.dataset.key!; writeUrl(); render(); }
 });
+
+/** The left column below 960px and the assistant below 1200px are drawers: classes on body (docs/ui-kit.md). */
+function openDrawer(cls: "sp-open-nav" | "sp-open-aside") {
+  document.body.classList.remove("sp-open-nav", "sp-open-aside");
+  document.body.classList.add(cls, "sp-sheet-open");
+}
+function closeDrawers() {
+  document.body.classList.remove("sp-open-nav", "sp-open-aside", "sp-sheet-open");
+}
+for (const q of ["(min-width: 1200px)", "(min-width: 960px)"]) matchMedia(q).addEventListener("change", (e) => { if (e.matches) closeDrawers(); });
 document.addEventListener("change", (e) => {
   const el = e.target as HTMLInputElement;
   if (el.dataset.act === "toggle") void act(el.checked ? "resume" : "pause", Number(el.dataset.id), el.dataset.via ?? "");
@@ -715,7 +770,8 @@ document.addEventListener("change", (e) => {
 document.addEventListener("keydown", (e) => {
   const row = (e.target as HTMLElement).closest?.<HTMLElement>(".row[data-key]");
   if (row && (e.key === "Enter" || e.key === " ") && e.target === row) { e.preventDefault(); S.sel = S.sel === row.dataset.key ? null : row.dataset.key!; writeUrl(); render(); }
-  if (e.key === "/" && !(e.target as HTMLElement).closest("input, textarea, select")) { e.preventDefault(); $("#q").focus(); }
+  if (e.key === "/" && !(e.target as HTMLElement).closest("input, textarea, select")) { e.preventDefault(); if (!matchMedia("(min-width: 960px)").matches) openDrawer("sp-open-nav"); $("#q").focus(); }
+  if (e.key === "Escape" && document.body.classList.contains("sp-sheet-open") && !document.querySelector("dialog[open]")) closeDrawers();
 });
 
 for (const seg of $$("[data-seg]")) for (const b of $$("button", seg)) b.addEventListener("click", () => { setSeg(seg.dataset.seg!, b.dataset.v!); preview(); });
@@ -732,8 +788,8 @@ $("#del-ok").addEventListener("click", async () => {
 function fitComposer() {
   const i = $<HTMLTextAreaElement>("#as-input");
   i.style.height = "";
-  if (i.value) i.style.height = `${Math.min(i.scrollHeight + 2, 160)}px`;
-  i.style.overflowY = i.scrollHeight > 160 ? "auto" : "hidden";
+  if (i.value) i.style.height = `${Math.min(i.scrollHeight + 2, 120)}px`;
+  i.style.overflowY = i.scrollHeight > 120 ? "auto" : "hidden";
 }
 $("#as-input").addEventListener("input", fitComposer);
 $("#as-machine").addEventListener("change", (e) => {

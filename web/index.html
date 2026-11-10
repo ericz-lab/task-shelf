@@ -7,6 +7,11 @@
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <!-- theme and language before first paint (ai-space docs/app-spec.md, App pages): ?theme= / ?lang= → stored → system -->
 <script>(function(){var d=document.documentElement;d.classList.add("js");var q=new URLSearchParams(location.search);var get=function(k){try{return localStorage.getItem(k)}catch(e){return null}};var t=q.get("theme")||get("task-shelf.theme");if(t==="light"||t==="dark")d.dataset.theme=t;d.dataset.mode=t==="light"||t==="dark"?t:"system";var l=q.get("lang")||get("task-shelf.lang")||((navigator.languages||[navigator.language]).find(function(x){return /^(zh|en)/i.test(x)})||"en");d.lang=/^zh/i.test(l)?"zh-CN":"en";})();</script>
+<!-- Space Tiles (ai-space docs/ui-kit.md): this app's copy of the kit, then the space's current /_space/ui.css, then this app's own rules.
+     Bun's HTML bundler renames, moves and merges the stylesheets, so the order is set with cascade layers rather than link order:
+     styles.css imports the copy into layer kit and keeps its own rules in layer app; the space's version goes into layer space,
+     added at runtime so the bundler leaves the path alone (a 404 on an older ai-space or on the app's own port is ignored). -->
+<script>(function(){var s=document.createElement("style");s.textContent='@layer kit, space, app;@import url("/_space/ui.css") layer(space);';document.head.appendChild(s)})()</script>
 <link rel="stylesheet" href="./styles.css">
 <!-- ai-space usage heartbeat (docs/usage.md); added at runtime so Bun's HTML bundler leaves it alone -->
 <script>(function(){var s=document.createElement("script");s.src="/_space/usage.js";s.defer=true;document.head.appendChild(s)})()</script>
@@ -25,174 +30,208 @@
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
   <symbol id="i-new" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 </svg>
 
-<div class="app">
-  <header class="top">
-    <div class="brand">
-      <h1><span data-i18n="app">定时任务收纳</span><span class="alt" data-i18n="appAlt">Task Shelf</span></h1>
-      <p class="sum" id="sum" aria-live="polite"></p>
+<div class="sp-app">
+  <nav class="sp-tile sp-side" id="side" data-i18n-aria="navAria" aria-label="应用导航">
+    <div class="sp-brand">
+      <div class="sp-brand-txt"><strong data-i18n="app">定时任务收纳</strong><span class="sp-brand-sub"><span data-i18n="appAlt">Task Shelf</span></span></div>
+      <button type="button" class="sp-icon-btn sp-side-close" data-act="drawer-close" data-i18n-aria="navClose" aria-label="关闭菜单"><svg class="ic"><use href="#i-x"/></svg></button>
     </div>
-    <div class="tools">
-    <div class="search" role="search">
+    <div class="sp-search" role="search">
       <svg class="ic"><use href="#i-search"/></svg>
-      <label class="sr" for="q" data-i18n="searchAria">搜索任务</label>
-      <input id="q" type="search" placeholder="搜索任务、应用、命令" data-i18n-ph="search" autocomplete="off">
-      <kbd aria-hidden="true">/</kbd>
+      <label class="sp-sr" for="q" data-i18n="searchAria">搜索任务</label>
+      <input id="q" type="search" placeholder="搜索任务、应用" data-i18n-ph="search" autocomplete="off">
+      <span class="sp-kbd" aria-hidden="true">/</span>
     </div>
-      <button type="button" class="btn btn-primary" data-act="new"><svg class="ic"><use href="#i-plus"/></svg><span data-i18n="newJob">新建任务</span></button>
-      <button type="button" class="btn btn-secondary as-toggle" data-act="as-open"><svg class="ic"><use href="#i-chat"/></svg><span data-i18n="assistantOpen">AI 助手</span></button>
+    <div class="sp-side-scroll">
+      <div class="sp-ngroup" id="machine-group" hidden>
+        <div class="sp-nlabel" id="g-machine" data-i18n="navMachine">机器</div>
+        <ul id="machine-nav" aria-labelledby="g-machine"></ul>
+      </div>
+      <div class="sp-ngroup">
+        <div class="sp-nlabel" id="g-view" data-i18n="navView">视图</div>
+        <ul aria-labelledby="g-view">
+          <li><button type="button" class="sp-nitem" data-tab="jobs" aria-pressed="true" data-i18n-title="tabJobsHint"><span data-i18n="tabJobs">任务</span><span class="sp-nc n">0</span></button></li>
+          <li><button type="button" class="sp-nitem" data-tab="archived" aria-pressed="false" data-i18n-title="tabArchivedHint"><span data-i18n="tabArchived">已归档</span><span class="sp-nc n">0</span></button></li>
+        </ul>
+      </div>
     </div>
-    <div class="prefs">
-      <div class="seg seg-lang" role="group" aria-label="界面语言" data-i18n-aria="langAria">
+    <div class="sp-side-foot">
+      <div class="sp-seg sm" role="group" aria-label="界面语言" data-i18n-aria="langAria">
         <button type="button" data-lang="zh" aria-pressed="true" lang="zh">中</button>
         <button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button>
       </div>
-      <button type="button" class="icon-btn bordered" id="theme" aria-label="主题：跟随系统，点按切换">
+      <button type="button" class="sp-icon-btn" id="theme" aria-label="主题：跟随系统，点按切换">
         <svg class="ic th th-system"><use href="#i-auto"/></svg>
         <svg class="ic th th-light"><use href="#i-sun"/></svg>
         <svg class="ic th th-dark"><use href="#i-moon"/></svg>
       </button>
     </div>
-  </header>
+  </nav>
 
-  <main class="main">
-    <p class="banner" id="ro-banner" hidden data-i18n="readOnlyBanner"></p>
-    <div class="bar">
-      <div class="tabs" role="group" aria-label="任务范围" data-i18n-aria="tabsAria">
-        <button type="button" data-tab="jobs" aria-pressed="true" data-i18n-title="tabJobsHint"><span data-i18n="tabJobs">任务</span><span class="n num">0</span></button>
-        <button type="button" data-tab="archived" aria-pressed="false" data-i18n-title="tabArchivedHint"><span data-i18n="tabArchived">已归档</span><span class="n num">0</span></button>
+  <div class="sp-work has-aside">
+    <main class="sp-center" id="main">
+      <div class="sp-mbar">
+        <button type="button" class="sp-icon-btn" data-act="nav-open" data-i18n-aria="navOpen" aria-label="打开菜单"><svg class="ic"><use href="#i-menu"/></svg></button>
+        <strong data-i18n="app">定时任务收纳</strong>
+        <button type="button" class="sp-icon-btn" data-act="as-open" data-i18n-aria="assistantOpen" aria-label="AI 助手"><svg class="ic"><use href="#i-chat"/></svg></button>
       </div>
-      <div class="chips-f" role="group" aria-label="按状态筛选" data-i18n-aria="filtersAria">
-        <button type="button" class="fchip err" data-f="failing" aria-pressed="false"><i></i><span data-i18n="fFailing">失败</span></button>
-        <button type="button" class="fchip off" data-f="paused" aria-pressed="false"><i></i><span data-i18n="fPaused">已暂停</span></button>
-        <button type="button" class="fchip live" data-f="running" aria-pressed="false"><i></i><span data-i18n="fRunning">运行中</span></button>
-      </div>
-    </div>
-    <div class="table" role="table">
-      <div class="thead" role="row">
-        <div role="columnheader" data-i18n="colName">任务</div>
-        <div role="columnheader" data-i18n="colSchedule">时间表</div>
-        <div role="columnheader" data-i18n="colNext">下次运行</div>
-        <div role="columnheader" data-i18n="colLast">上次运行</div>
-        <div role="columnheader" data-i18n="colOn">启用</div>
-        <div role="columnheader" class="sr-col" data-i18n="colActions">操作</div>
-      </div>
-      <div id="rows" role="rowgroup"></div>
-      <div id="list-state" class="list-state" data-state="loading"></div>
-    </div>
-    <p class="list-foot" id="list-foot" hidden></p>
-    <section id="detail" class="detail" hidden aria-live="polite"></section>
-  </main>
 
-  <aside class="assistant" id="assistant" aria-labelledby="as-title">
-    <header class="as-head">
-      <h2 id="as-title" data-i18n="asTitle">AI 助手</h2>
-      <select id="as-machine" class="mach-pick" hidden data-i18n-aria="asMachine" aria-label="助手所在机器"></select>
-      <div class="as-btns">
-        <button type="button" class="btn btn-ghost btn-sm as-new" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
-        <button type="button" class="icon-btn as-close" data-act="as-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
+      <header class="sp-head">
+        <div class="head-title">
+          <h1 id="view-title">任务</h1>
+          <p class="sum" id="sum" aria-live="polite"></p>
+        </div>
+        <div class="sp-head-actions">
+          <button type="button" class="sp-btn sp-only-mid" data-act="as-open"><svg class="ic"><use href="#i-chat"/></svg><span data-i18n="assistantOpen">AI 助手</span></button>
+          <button type="button" class="sp-btn-ink" data-act="new"><svg class="ic"><use href="#i-plus"/></svg><span data-i18n="newJob">新建任务</span></button>
+        </div>
+      </header>
+
+      <div class="sp-banner warn" id="ro-banner" role="status" hidden><svg class="ic"><use href="#i-lock"/></svg><span class="grow" id="ro-text"></span></div>
+
+      <div class="sp-toolbar">
+        <div class="sp-seg filters" role="group" aria-label="按状态筛选" data-i18n-aria="filtersAria">
+          <button type="button" data-f="" aria-pressed="true"><span data-i18n="fAll">全部</span></button>
+          <button type="button" data-f="failing" aria-pressed="false"><span data-i18n="fFailing">失败</span><span class="n">0</span></button>
+          <button type="button" data-f="paused" aria-pressed="false"><span data-i18n="fPaused">已暂停</span><span class="n">0</span></button>
+          <button type="button" data-f="running" aria-pressed="false"><span data-i18n="fRunning">运行中</span><span class="n">0</span></button>
+        </div>
       </div>
-    </header>
-    <div class="as-log" id="as-log" aria-live="polite"></div>
-    <div class="as-foot">
-      <div class="presets">
-        <button type="button" class="preset" data-act="preset" data-i18n="asP1">有哪些任务在失败？</button>
-        <button type="button" class="preset" data-act="preset" data-i18n="asP2">新建一个每天早上 8 点的任务</button>
-        <button type="button" class="preset" data-act="preset" data-i18n="asP3">接下来一小时会运行什么？</button>
+
+      <section class="sp-tile tasks" data-i18n-aria="tasksAria" aria-label="任务列表">
+        <table class="sp-table tt">
+          <thead>
+            <tr>
+              <th scope="col" data-i18n="colName">任务</th>
+              <th scope="col" data-i18n="colSchedule">时间表</th>
+              <th scope="col" data-i18n="colNext">下次运行</th>
+              <th scope="col" data-i18n="colLast">上次运行</th>
+              <th scope="col" data-i18n="colOn">启用</th>
+              <th scope="col"><span class="sp-sr" data-i18n="colActions">操作</span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="list-state" class="list-state" data-state="loading"></div>
+        <p class="list-foot" id="list-foot" hidden></p>
+      </section>
+
+      <section id="detail" class="sp-tile pad detail" hidden aria-live="polite"></section>
+    </main>
+
+    <aside class="sp-tile sp-aside" id="assistant" aria-labelledby="as-title">
+      <div class="sp-aside-head">
+        <h2 class="sp-tt" id="as-title"><span class="sp-sq" aria-hidden="true"></span><span data-i18n="asTitle">AI 助手</span></h2>
+        <select id="as-machine" class="sp-select mach-pick" hidden data-i18n-aria="asMachine" aria-label="助手所在机器"></select>
+        <div class="as-btns">
+          <button type="button" class="sp-btn ghost sm" data-act="as-new"><svg class="ic"><use href="#i-new"/></svg><span data-i18n="asNew">新对话</span></button>
+          <button type="button" class="sp-icon-btn sp-aside-close" data-act="drawer-close" data-i18n-aria="asClose" aria-label="关闭助手"><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
       </div>
-      <form id="as-form" class="as-form">
-        <label class="sr" for="as-input" data-i18n="asLabel">给 AI 助手的消息</label>
+      <div class="sp-aside-body" id="as-scroll">
+        <div class="presets">
+          <button type="button" class="sp-btn outline preset" data-act="preset" data-i18n="asP1">有哪些任务在失败？</button>
+          <button type="button" class="sp-btn outline preset" data-act="preset" data-i18n="asP2">新建一个每天早上 8 点的任务</button>
+          <button type="button" class="sp-btn outline preset" data-act="preset" data-i18n="asP3">接下来一小时会运行什么？</button>
+        </div>
+        <div class="as-log" id="as-log" aria-live="polite"></div>
+      </div>
+      <form id="as-form" class="sp-composer">
+        <label class="sp-sr" for="as-input" data-i18n="asLabel">给 AI 助手的消息</label>
         <textarea id="as-input" rows="1" maxlength="4000" placeholder="" data-i18n-ph="asPh"></textarea>
-        <button type="submit" id="as-send" class="btn btn-secondary btn-icon" data-i18n-aria="asSend" aria-label="发送"><svg class="ic"><use href="#i-send"/></svg></button>
+        <button type="submit" id="as-send" class="sp-send" data-i18n-aria="asSend" aria-label="发送"><svg class="ic"><use href="#i-send"/></svg></button>
       </form>
-    </div>
-  </aside>
+    </aside>
+  </div>
 </div>
+<div class="sp-scrim" data-act="drawer-close"></div>
 
-<dialog id="job-dialog" class="sheet" aria-labelledby="jf-title">
+<dialog id="job-dialog" class="sp-dialog job-dialog" aria-labelledby="jf-title">
   <form id="job-form" novalidate>
-    <header class="sheet-head"><h2 id="jf-title">新建任务</h2><button type="button" class="btn btn-ghost btn-icon" data-act="close-dialog" data-i18n-aria="close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button></header>
-    <div class="sheet-body">
-      <label class="fld" id="jf-machine-row" hidden><span data-i18n="fmMachine">在哪台机器上运行</span><select name="machine" id="jf-machine"></select></label>
+    <header class="sp-dialog-head"><h2 class="sp-tt"><span class="sp-sq" aria-hidden="true"></span><span id="jf-title">新建任务</span></h2><button type="button" class="sp-icon-btn" data-act="close-dialog" data-i18n-aria="close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button></header>
+    <div class="sp-dialog-body">
+      <div class="sp-field" id="jf-machine-row" hidden><label for="jf-machine" data-i18n="fmMachine">在哪台机器上运行</label><select name="machine" id="jf-machine" class="sp-select"></select></div>
       <div class="f-row two">
-        <label class="fld"><span data-i18n="fmName">名称</span><input name="name" class="mono" required pattern="[a-z0-9][a-z0-9._\-]{0,63}" maxlength="64" autocomplete="off" spellcheck="false"><small data-i18n="fmNameHint"></small></label>
-        <label class="fld"><span data-i18n="fmDescription">说明（可选）</span><input name="description" maxlength="500"></label>
+        <div class="sp-field"><label for="jf-name" data-i18n="fmName">名称</label><input id="jf-name" name="name" class="sp-input mono" required pattern="[a-z0-9][a-z0-9._\-]{0,63}" maxlength="64" autocomplete="off" spellcheck="false"><small class="sp-hint" data-i18n="fmNameHint"></small></div>
+        <div class="sp-field"><label for="jf-desc" data-i18n="fmDescription">说明（可选）</label><input id="jf-desc" name="description" class="sp-input" maxlength="500"></div>
       </div>
       <fieldset class="f-group">
         <legend data-i18n="fmWhat">运行什么</legend>
-        <div class="seg" data-seg="kind" role="group">
+        <div class="sp-seg in-tile" data-seg="kind" role="group">
           <button type="button" data-v="command" aria-pressed="true" data-i18n="fmKindCommand">命令</button>
           <button type="button" data-v="http" aria-pressed="false" data-i18n="fmKindHttp">HTTP</button>
           <button type="button" data-v="agent" aria-pressed="false" data-i18n="fmKindAgent">AI 提示词</button>
         </div>
         <div data-pane="kind" data-v="command" class="pane">
-          <label class="fld"><span data-i18n="fmCommand">命令</span><textarea name="command" class="mono" rows="2" maxlength="4000" spellcheck="false" data-i18n-ph="fmCommandPh"></textarea></label>
-          <label class="fld"><span data-i18n="fmCwd">工作目录</span><input name="cwd" class="mono" spellcheck="false" placeholder="/home/…"></label>
+          <div class="sp-field"><label for="jf-command" data-i18n="fmCommand">命令</label><textarea id="jf-command" name="command" class="sp-textarea mono" rows="2" maxlength="4000" spellcheck="false" data-i18n-ph="fmCommandPh"></textarea></div>
+          <div class="sp-field"><label for="jf-cwd" data-i18n="fmCwd">工作目录</label><input id="jf-cwd" name="cwd" class="sp-input mono" spellcheck="false" placeholder="/home/…"></div>
         </div>
         <div data-pane="kind" data-v="http" class="pane" hidden>
           <div class="f-row method">
-            <label class="fld"><span data-i18n="fmMethod">方法</span><select name="method"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
-            <label class="fld"><span data-i18n="fmUrl">网址</span><input name="url" class="mono" type="url" spellcheck="false" placeholder="http://127.0.0.1:9045/jobs/refresh"></label>
+            <div class="sp-field"><label for="jf-method" data-i18n="fmMethod">方法</label><select id="jf-method" name="method" class="sp-select"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></div>
+            <div class="sp-field"><label for="jf-url" data-i18n="fmUrl">网址</label><input id="jf-url" name="url" class="sp-input mono" type="url" spellcheck="false" placeholder="http://127.0.0.1:9045/jobs/refresh"></div>
           </div>
-          <label class="fld"><span data-i18n="fmBody">请求体</span><textarea name="body" class="mono" rows="2" spellcheck="false"></textarea></label>
+          <div class="sp-field"><label for="jf-body" data-i18n="fmBody">请求体</label><textarea id="jf-body" name="body" class="sp-textarea mono" rows="2" spellcheck="false"></textarea></div>
         </div>
         <div data-pane="kind" data-v="agent" class="pane" hidden>
-          <label class="fld"><span data-i18n="fmPrompt">提示词</span><textarea name="prompt" rows="4" maxlength="20000" data-i18n-ph="fmPromptPh"></textarea></label>
-          <label class="fld"><span data-i18n="fmModel">模型</span><input name="model" class="mono" spellcheck="false" placeholder="claude/junior"></label>
+          <div class="sp-field"><label for="jf-prompt" data-i18n="fmPrompt">提示词</label><textarea id="jf-prompt" name="prompt" class="sp-textarea" rows="4" maxlength="20000" data-i18n-ph="fmPromptPh"></textarea></div>
+          <div class="sp-field"><label for="jf-model" data-i18n="fmModel">模型</label><input id="jf-model" name="model" class="sp-input mono" spellcheck="false" placeholder="claude/junior"></div>
         </div>
       </fieldset>
       <fieldset class="f-group">
         <legend data-i18n="fmWhen">什么时候</legend>
-        <div class="seg" data-seg="when" role="group">
+        <div class="sp-seg in-tile" data-seg="when" role="group">
           <button type="button" data-v="cron" aria-pressed="true" data-i18n="fmCron">按日历</button>
           <button type="button" data-v="every" aria-pressed="false" data-i18n="fmEvery">固定间隔</button>
           <button type="button" data-v="at" aria-pressed="false" data-i18n="fmAt">一次</button>
         </div>
         <div data-pane="when" data-v="cron" class="pane f-row two">
-          <label class="fld"><span data-i18n="fmCronExpr">cron</span><input name="expr" class="mono" spellcheck="false" placeholder="30 8 * * 1-5"></label>
-          <label class="fld"><span data-i18n="fmZone">时区</span><select name="cronTz" class="mono"></select></label>
+          <div class="sp-field"><label for="jf-expr" data-i18n="fmCronExpr">cron</label><input id="jf-expr" name="expr" class="sp-input mono" spellcheck="false" placeholder="30 8 * * 1-5"></div>
+          <div class="sp-field"><label for="jf-crontz" data-i18n="fmZone">时区</label><select id="jf-crontz" name="cronTz" class="sp-select mono"></select></div>
         </div>
         <div data-pane="when" data-v="every" class="pane" hidden>
-          <label class="fld"><span data-i18n="fmEveryVal">间隔</span><input name="every" class="mono" spellcheck="false" placeholder="30m"></label>
+          <div class="sp-field"><label for="jf-every" data-i18n="fmEveryVal">间隔</label><input id="jf-every" name="every" class="sp-input mono" spellcheck="false" placeholder="30m"></div>
         </div>
         <div data-pane="when" data-v="at" class="pane f-row two" hidden>
-          <label class="fld"><span data-i18n="fmAtVal">日期和时间</span><input name="atLocal" type="datetime-local" class="mono"></label>
-          <label class="fld"><span data-i18n="fmZone">时区</span><select name="atTz" class="mono"></select></label>
+          <div class="sp-field"><label for="jf-at" data-i18n="fmAtVal">日期和时间</label><input id="jf-at" name="atLocal" type="datetime-local" class="sp-input mono"></div>
+          <div class="sp-field"><label for="jf-attz" data-i18n="fmZone">时区</label><select id="jf-attz" name="atTz" class="sp-select mono"></select></div>
         </div>
         <p class="preview" id="jf-preview" aria-live="polite"></p>
       </fieldset>
       <div class="f-row two">
-        <label class="fld"><span data-i18n="fmTimeout">超时</span><input name="timeout" class="mono" spellcheck="false" placeholder="10m"></label>
-        <label class="fld check"><input type="checkbox" name="enabled" checked><span data-i18n="fmEnabled">保存后启用</span></label>
+        <div class="sp-field"><label for="jf-timeout" data-i18n="fmTimeout">超时</label><input id="jf-timeout" name="timeout" class="sp-input mono" spellcheck="false" placeholder="10m"></div>
+        <label class="check-row"><span class="sp-check"><input type="checkbox" name="enabled" checked><span><svg class="ic"><use href="#i-check"/></svg></span></span><span data-i18n="fmEnabled">保存后启用</span></label>
       </div>
-      <p class="note" id="jf-editnote" hidden data-i18n="fmEditNote"></p>
-      <p class="err-text" id="jf-error" role="alert"></p>
+      <p class="sp-hint" id="jf-editnote" hidden data-i18n="fmEditNote"></p>
+      <p class="sp-err" id="jf-error" role="alert"></p>
     </div>
-    <footer class="sheet-foot">
-      <button type="button" class="btn" id="jf-cancel" data-i18n="fmCancel">取消</button>
-      <button type="submit" class="btn btn-primary" id="jf-save" data-i18n="fmSave">保存</button>
+    <footer class="sp-dialog-foot">
+      <button type="button" class="sp-btn" id="jf-cancel" data-i18n="fmCancel">取消</button>
+      <button type="submit" class="sp-btn-ink" id="jf-save" data-i18n="fmSave">保存</button>
     </footer>
   </form>
 </dialog>
 
-<dialog id="del-dialog" class="sheet sheet-sm" aria-labelledby="del-title">
-  <div class="sheet-body">
+<dialog id="del-dialog" class="sp-dialog sm" aria-labelledby="del-title">
+  <div class="sp-dialog-body">
     <h2 id="del-title"></h2>
     <p data-i18n="delBody"></p>
   </div>
-  <footer class="sheet-foot">
-    <button type="button" class="btn" id="del-cancel" data-i18n="fmCancel">取消</button>
-    <button type="button" class="btn btn-danger" id="del-ok" data-i18n="delConfirm">确认删除</button>
+  <footer class="sp-dialog-foot">
+    <button type="button" class="sp-btn" id="del-cancel" data-i18n="fmCancel">取消</button>
+    <button type="button" class="sp-btn-danger" id="del-ok" data-i18n="delConfirm">确认删除</button>
   </footer>
 </dialog>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="sp-toast" role="status" aria-live="polite"></div>
 <script type="module" src="./app.ts"></script>
 </body>
 </html>
