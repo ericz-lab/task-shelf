@@ -65,3 +65,7 @@ bun install
 bun run check                    # install, typecheck, tests
 bun run dev                      # bun --hot src/index.ts, reads .env (never on the service's port while it runs)
 ```
+
+## Installation package
+
+`bun run pack [-- --out DIR]` builds `<name>-<version>.spaceapp` (ai-space docs/app-packages.md) from this tree without changing it; `scripts/pack.ts` explains how. `space.yaml` stays spec 1 for the git deployment; the package's spec-2 manifest is made from it, with `version` from `package.json` and the files, launch mode and offline notes from `spacePackage` there. A package runs on a port ai-space assigns: nothing may assume the manifest's port (the package's entry writes the assigned one to `<data dir>/service.port`). Machine settings of a package install go in `<workspace>/data/<app>/.env`. Bump `version` for each package released; install with `space app install`, upgrade with `space app upgrade`. A machine is served by the git deployment or by a package, never both.
