@@ -4,7 +4,7 @@ spec: 1
 name: task-shelf
 title: Task Shelf
 description: A home for small scheduled jobs that have no app of their own. You add, edit, pause, resume and run your jobs by hand or by asking the AI assistant; ai-space's scheduler runs them.
-icon: icon.svg
+icon: icon.png
 url: /?lang={lang}&accent={accent}
 status: active
 i18n:

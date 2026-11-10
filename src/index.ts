@@ -118,7 +118,7 @@ export function createServer(opts: ServerOptions) {
     routes: {
       "/": opts.web === false ? () => new Response("no page", { status: 404 }) : index,
       "/healthz": () => json({ ok: true }),
-      "/icon.svg": () => new Response(Bun.file(new URL("../icon.svg", import.meta.url).pathname), { headers: { "content-type": "image/svg+xml", "cache-control": "max-age=3600" } }),
+      "/icon.png": () => new Response(Bun.file(new URL("../icon.png", import.meta.url).pathname), { headers: { "content-type": "image/png", "cache-control": "max-age=3600" } }),
 
       // The machines this page shows: this one first, then the peers running this app.
       "/api/machines": async () => json({ ok: true, ...(await machines()) }),
