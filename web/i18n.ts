@@ -4,7 +4,6 @@ export type Lang = "zh" | "en";
 export const DICT: Record<string, { zh: string; en: string }> = {
   title: { zh: "定时任务收纳 · Task Shelf", en: "Task Shelf · 定时任务收纳" },
   app: { zh: "定时任务收纳", en: "Task Shelf" },
-  appAlt: { zh: "Task Shelf", en: "定时任务收纳" },
   langAria: { zh: "界面语言", en: "Language" },
   themeSystem: { zh: "主题：跟随系统，点按切换", en: "Theme: system, click to change" },
   themeLight: { zh: "主题：浅色，点按切换", en: "Theme: light, click to change" },
