@@ -34,7 +34,7 @@ src/space.ts           ai-space client (tasks, runs, apps, model)
 src/remote.ts        * one page over several machines: the `ops` capability, the machine list, forwarding to a peer
 src/config.ts          environment, operator credential lookup
 src/testing.ts         in-memory ai-space for tests
-web/index.html         the page shell; app.ts the logic; i18n.ts the zh/en strings; styles.css the look
+web/index.html         the page shell; app.ts the logic; i18n.ts the zh/en strings; styles.css the look; kit.css the kit copy
 deploy/post-receive    bare-repository hook: `space app deploy`
 ```
 
@@ -44,7 +44,7 @@ deploy/post-receive    bare-repository hook: `space app deploy`
 
 ## Design
 
-The page follows Design Studio design (see the record in ai-todo #317 for the id and version), style-book style run-trace: quiet grey paper, hairline rules, mono for cron, commands and zones, teal only for live work and selection, red only for failure. Keep its tokens (`:root` and both dark blocks in `styles.css`).
+The page uses Space Tiles, the built-in apps' UI kit (ai-space docs/ui-kit.md): a left column tile (brand, search, machines, views, language and theme), the work column (heading, status filter, task table tile, detail tile) and the assistant tile on the right; below 1200px the assistant and below 960px the left column are drawers (`sp-open-aside`, `sp-open-nav`, `sp-sheet-open` on body), on phones the assistant is a bottom sheet. `web/kit.css` is a copy of the kit; `styles.css` imports it into cascade layer `kit`, the page adds the space's `/_space/ui.css` at runtime in layer `space`, and the app's own rules sit in layer `app` (Bun's bundler moves and merges stylesheets, so the order is set by layers, not links). `styles.css` holds only what is specific to this app, with the kit's tokens: no colours of its own. Kit rules kept here: the accent marks tile titles (`.sp-tt` + `.sp-sq`), focus and the selected item only; one ink button per screen (新建任务; the form's 保存 in its dialog); running is ink, amber only a warning; a count shown in the left column is not repeated in the heading. Refresh the copy with `curl -s http://127.0.0.1:8700/_space/ui.css > web/kit.css`.
 
 Page rules (ai-space docs/app-spec.md#app-pages): full-bleed, zh/en with the 中 / EN switch (every string in `web/i18n.ts`), theme button system → light → dark applied in `<head>` before first paint (`task-shelf.theme`, `task-shelf.lang`), `/_space/usage.js` and `/_space/feedback.js` added at runtime so Bun's bundler leaves them alone.
 
