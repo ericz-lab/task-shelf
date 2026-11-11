@@ -31,7 +31,7 @@ model:
 # peers through the bus (src/remote.ts). The provider itself accepts only this app as the caller.
 provides:
   ops:
-    description: A request for one of Task Shelf's own page routes on this machine (list, runs, create, change, pause, resume, run, archive, restore, assistant), from Task Shelf on another space.
+    description: A request for one of Task Shelf's own page routes on this machine (list, runs, a run's conversation, create, change, pause, resume, run, archive, restore, assistant), from Task Shelf on another space.
     http: { method: POST, path: /api/remote }
     timeout: 3m
 

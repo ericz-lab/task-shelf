@@ -18,6 +18,7 @@ How it differs from ai-space's built-in Tasks window (panel Settings → 定时�
 6. **Credentials stay in the process.** Reads and model calls use `SPACE_APP_TOKEN`. ai-space's task write routes take only the operator credential: `SPACE_API_TOKEN`, else `<workspace>/run/operator-token` (src/config.ts). Neither is ever logged or sent to the page. Without one the page lists tasks and every write answers `read-only`.
 7. **Writes come from the page.** Mutating routes need `content-type: application/json` and, when a browser sends `Origin`, this host.
 8. **Loopback only.** The service binds `127.0.0.1:${PORT}`. No host, ssh alias or home directory in code, docs or commits.
+9. **Only a session a run names is read.** The conversation route takes a run, never a path or a session id: the id comes from that run's own output (`claude-session: <uuid>` on its own line), the file from `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/*/<uuid>.jsonl`. What is sent is bounded text; images and thinking are left out (src/transcript.ts).
 
 ## Directory map
 
@@ -31,6 +32,7 @@ src/describe.ts        schedules in words (zh/en); shared with the page, no depe
 src/catalog.ts         overview rows: owner, headless, zone, state; counts; next up
 src/assistant.ts     * prompt, plan parsing, tools, confirmation cards
 src/space.ts           ai-space client (tasks, runs, apps, model)
+src/transcript.ts    * a run's conversation: the `claude-session: <uuid>` line in its output, the session file as bounded entries
 src/remote.ts        * one page over several machines: the `ops` capability, the machine list, forwarding to a peer
 src/config.ts          environment, operator credential lookup
 src/testing.ts         in-memory ai-space for tests
@@ -40,7 +42,7 @@ deploy/post-receive    bare-repository hook: `space app deploy`
 
 ## API
 
-`GET /api/meta`, `GET /api/overview` (rows, counts, nextUp, spaceError), `GET /api/rows/:key/runs?limit` (any task; a job's kept runs merged), `GET|POST /api/jobs`, `GET|PATCH /api/jobs/:id`, `POST /api/jobs/:id/pause|resume|run|archive|restore`, `POST /api/reconcile`, `POST /api/schedule/preview { schedule, zone }`, `GET|POST /api/assistant { message, zone, lang, session }`, `POST /api/assistant/new`, `POST /api/assistant/confirm { token, accept, lang }`. Across machines: `GET /api/machines`, `/api/m/:peer/<any route above>`, and `POST /api/remote { method, path, body }` (the `ops` capability, for the bus only). Errors are `{ ok: false, code, error }`; the page maps `code` to its language.
+`GET /api/meta`, `GET /api/overview` (rows, counts, nextUp, spaceError), `GET /api/rows/:key/runs?limit` (any task; a job's kept runs merged; `session` when the output names one), `GET /api/rows/:key/transcript?task&run` (that run's Claude Code session as entries), `GET|POST /api/jobs`, `GET|PATCH /api/jobs/:id`, `POST /api/jobs/:id/pause|resume|run|archive|restore`, `POST /api/reconcile`, `POST /api/schedule/preview { schedule, zone }`, `GET|POST /api/assistant { message, zone, lang, session }`, `POST /api/assistant/new`, `POST /api/assistant/confirm { token, accept, lang }`. Across machines: `GET /api/machines`, `/api/m/:peer/<any route above>`, and `POST /api/remote { method, path, body }` (the `ops` capability, for the bus only). Errors are `{ ok: false, code, error }`; the page maps `code` to its language.
 
 ## Design
 

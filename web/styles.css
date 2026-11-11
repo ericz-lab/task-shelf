@@ -129,6 +129,13 @@
 .rbar .dur { font-size:12px;color:var(--body);white-space:nowrap }
 .rt .out { font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
 .rt .run.bad .out { color:var(--body) }
+.rt .run { cursor:pointer }
+.run-tog { padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer }
+.rt .run-more td { padding:0 0 12px;border-top:0 }
+.rt .run-more:hover td { background:var(--clear) }
+.run-more pre { margin:0;font-size:12px }
+.run-more-btns { display:flex;gap:8px;margin-top:8px }
+.run-more-btns .ic { width:14px;height:14px }
 .changes { list-style:none;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12px }
 .changes b { font-weight:500;color:var(--ink) }
 @container (min-width: 640px) {
@@ -140,8 +147,19 @@
   .rt .run { display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-areas:"t k s" "d d d" "out out out";gap:6px 12px;padding:10px 0;border-top:1px solid var(--line) }
   .rt tbody .run:first-child { border-top:0 }
   .rt .run td { display:block;padding:0;border:0 }
+  .rt .run-more,.rt .run-more td { display:block }
   .rt .t { grid-area:t } .rt .k { grid-area:k } .rt .s { grid-area:s;justify-self:start } .rt .d { grid-area:d } .rt .out { grid-area:out;white-space:normal;overflow-wrap:anywhere }
 }
+
+/* ---- a run's conversation */
+.tx-dialog { width:min(100% - 24px, 820px) }
+.tx-dialog[open] { display:flex;flex-direction:column;max-height:calc(100vh - 50px);max-height:calc(100dvh - 50px) }
+.tx-sub { padding:4px 20px 0;overflow-wrap:anywhere }
+.tx-body { overflow:auto;min-height:0;gap:14px }
+.tx-tool { flex:none;border:1px solid var(--line);border-radius:var(--r-well);font-size:12px;min-width:0 }
+.tx-tool summary { display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;color:var(--ink);min-width:0 }
+.tx-tool summary .ttl { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted) }
+.tx-tool pre { margin:0 12px 10px;font-size:12px;max-height:320px;overflow:auto }
 
 /* ---- the assistant */
 .sp-aside-head .sp-tt { flex:none }
