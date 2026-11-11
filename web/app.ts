@@ -19,7 +19,8 @@ interface Row {
 /** One machine of the page: this one (via "") or a peer running Task Shelf. */
 interface Machine { via: string; name: string; writable: boolean; error: string | null }
 interface Counts { total: number; enabled: number; failing: number; running: number; paused: number; mine: number; headless: number }
-interface Run { id: number; taskId: string; startedAt: number; endedAt: number; status: "ok" | "error" | "skipped"; error?: string; output?: string; trigger: "schedule" | "manual" | "event" }
+interface Run { id: number; taskId: string; startedAt: number; endedAt: number; status: "ok" | "error" | "skipped"; error?: string; output?: string; trigger: "schedule" | "manual" | "event"; session?: string }
+type TxEntry = { kind: "user" | "assistant"; at?: string; text: string } | { kind: "tool"; at?: string; name: string; title: string; input: string; result?: string; failed?: boolean };
 type JobSchedule = { kind: "cron"; expr: string; tz: string } | { kind: "every"; everyMs: number } | { kind: "at"; at: string; tz: string };
 interface Job {
   id: number; name: string; description: string; kind: "command" | "http" | "agent"; command: string | null; cwd: string | null; httpMethod: string | null; httpUrl: string | null;
@@ -348,8 +349,8 @@ async function renderDetail() {
   try {
     const { runs } = await api<{ runs: Run[] }>(on(r.via, `/api/rows/${encodeURIComponent(r.key)}/runs?limit=10`));
     if (S.sel !== key) return;
-    const longest = Math.max(1, ...runs.map((x) => x.endedAt - x.startedAt));
-    $("#d-runs", box).innerHTML = runs.length ? runsTable(runs, longest) : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
+    shownRuns = runs;
+    drawRuns();
   } catch (e) {
     if (S.sel === key) $("#d-runs", box).innerHTML = `<p class="err-text">${esc(errText(e))}</p>`;
   }
@@ -363,6 +364,20 @@ async function renderDetail() {
   }
 }
 
+/** The selected task's runs as last read, and the one whose full output is open (`taskId:id`). */
+let shownRuns: Run[] = [];
+let openRun = "";
+const runKey = (r: Run) => `${r.taskId}:${r.id}`;
+
+/** Draw the runs as last read. */
+function drawRuns() {
+  const el = document.querySelector<HTMLElement>("#d-runs");
+  if (!el) return;
+  const longest = Math.max(1, ...shownRuns.map((x) => x.endedAt - x.startedAt));
+  const html = shownRuns.length ? runsTable(shownRuns, longest) : `<p class="dim">${esc(t("dNoRuns"))}</p>`;
+  el.innerHTML = html;
+}
+
 function runsTable(runs: Run[], longest: number): string {
   const head = ["rTime", "rTrigger", "rResult", "rDuration", "rOutput"].map((k) => `<th scope="col">${esc(t(k))}</th>`).join("");
   return `<table class="sp-table rt"><thead><tr>${head}</tr></thead><tbody>${runs.map((x) => runHtml(x, longest)).join("")}</tbody></table>`;
@@ -373,7 +388,39 @@ function runHtml(r: Run, longest: number): string {
   const first = (r.error || r.output || "").split("\n").find((l) => l.trim()) ?? "";
   const ms = Math.max(0, r.endedAt - r.startedAt);
   const pill = badge(cls, t(r.status === "ok" ? "stOk" : r.status === "error" ? "stError" : "stSkipped"));
-  return `<tr class="run ${cls}"><td class="t">${esc(absTime(r.startedAt))}</td><td class="k">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</td><td class="s">${pill}</td><td class="d"><span class="rbar"><span class="sp-meter${cls === "bad" ? " bad" : ""}" style="--v:${Math.max(2, Math.round((ms / longest) * 100))}%"><i></i></span><span class="dur">${esc(runDuration(ms))}</span></span></td><td class="out mono" title="${esc((r.error || r.output || "").slice(0, 2000))}">${esc(first.slice(0, 240))}</td></tr>`;
+  const key = runKey(r);
+  const open = openRun === key;
+  const row = `<tr class="run ${cls}${open ? " open" : ""}" data-act="run-open" data-run="${esc(key)}"><td class="t"><button type="button" class="run-tog" data-act="run-open" data-run="${esc(key)}" aria-expanded="${open}">${esc(absTime(r.startedAt))}</button></td><td class="k">${esc(t(r.trigger === "manual" ? "trManual" : r.trigger === "event" ? "trEvent" : "trSchedule"))}</td><td class="s">${pill}</td><td class="d"><span class="rbar"><span class="sp-meter${cls === "bad" ? " bad" : ""}" style="--v:${Math.max(2, Math.round((ms / longest) * 100))}%"><i></i></span><span class="dur">${esc(runDuration(ms))}</span></span></td><td class="out mono">${esc(first.slice(0, 240))}</td></tr>`;
+  if (!open) return row;
+  const full = [r.error, r.output].filter((x) => x && x.trim()).join("\n\n");
+  const more = `${full ? `<pre class="sp-code">${esc(full)}</pre>` : `<p class="dim">${esc(t("rNoOutput"))}</p>`}${r.session ? `<div class="run-more-btns"><button type="button" class="sp-btn sm" data-act="transcript" data-run="${esc(key)}">${icon("i-chat")}<span>${esc(t("txOpen"))}</span></button></div>` : ""}`;
+  return `${row}<tr class="run-more"><td colspan="5">${more}</td></tr>`;
+}
+
+// ---------------------------------------------------------------- a run's conversation
+
+/** Show the Claude Code session a run named in its output (src/transcript.ts). */
+async function openTranscript(key: string) {
+  const run = shownRuns.find((x) => runKey(x) === key);
+  const row = S.rows.find((x) => x.uid === S.sel);
+  if (!run || !row) return;
+  const dlg = $<HTMLDialogElement>("#tx-dialog");
+  const body = $("#tx-body", dlg);
+  $("#tx-sub", dlg).textContent = `${row.name} · ${absTime(run.startedAt)}`;
+  body.innerHTML = `<p class="dim">${esc(t("loading"))}</p>`;
+  if (!dlg.open) dlg.showModal();
+  try {
+    const d = await api<{ entries: TxEntry[]; truncated: boolean }>(on(row.via, `/api/rows/${encodeURIComponent(row.key)}/transcript?task=${encodeURIComponent(run.taskId)}&run=${run.id}`));
+    body.innerHTML = (d.entries.length ? d.entries.map(entryHtml).join("") : `<p class="dim">${esc(t("txEmpty"))}</p>`) + (d.truncated ? `<p class="dim sp-small">${esc(t("txTruncated", { n: d.entries.length }))}</p>` : "");
+  } catch (e) {
+    body.innerHTML = `<p class="err-text">${esc(errText(e))}</p>`;
+  }
+  body.scrollTop = 0;
+}
+
+function entryHtml(e: TxEntry): string {
+  if (e.kind !== "tool") return e.kind === "user" ? `<div class="sp-msg-me"><p>${esc(e.text)}</p></div>` : `<div class="msg"><p>${esc(e.text)}</p></div>`;
+  return `<details class="tx-tool${e.failed ? " bad" : ""}"><summary><span class="mono name">${esc(e.name)}</span><span class="ttl">${esc(e.title)}</span>${e.failed ? badge("bad", t("stError")) : ""}</summary><pre class="sp-code">${esc(e.input)}</pre>${e.result ? `<pre class="sp-code">${esc(e.result)}</pre>` : ""}</details>`;
 }
 
 // ---------------------------------------------------------------- loading
@@ -733,6 +780,12 @@ document.addEventListener("click", async (e) => {
       case "reload": S.loaded = false; render(); return load();
       case "close-detail": S.sel = null; writeUrl(); return render();
       case "close-dialog": return el.closest("dialog")?.close();
+      case "run-open": {
+        if (getSelection()?.toString()) return;   // picking text in a row is not a click on it
+        openRun = openRun === el.dataset.run ? "" : el.dataset.run!;
+        return drawRuns();
+      }
+      case "transcript": return openTranscript(el.dataset.run!);
       case "toggle": return;
       case "confirm-yes": case "confirm-no": {
         const card = el.closest<HTMLElement>("[data-token]");

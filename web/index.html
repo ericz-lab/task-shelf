@@ -233,6 +233,12 @@
   </footer>
 </dialog>
 
+<dialog id="tx-dialog" class="sp-dialog tx-dialog" aria-labelledby="tx-title">
+  <header class="sp-dialog-head"><h2 class="sp-tt"><span class="sp-sq" aria-hidden="true"></span><span id="tx-title" data-i18n="txTitle">对话记录</span></h2><button type="button" class="sp-icon-btn" data-act="close-dialog" data-i18n-aria="close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button></header>
+  <p class="tx-sub sp-small sp-muted mono" id="tx-sub"></p>
+  <div class="sp-dialog-body tx-body" id="tx-body"></div>
+</dialog>
+
 <div id="toast" class="sp-toast" role="status" aria-live="polite"></div>
 <script type="module" src="./app.ts"></script>
 </body>

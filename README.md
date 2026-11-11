@@ -10,7 +10,21 @@ The tasks page shows only the jobs kept here. Tasks of other apps and ai-space's
 - **已归档 / Archived**: deleted jobs; restore one to put it back on the schedule.
 
 Each row shows the schedule in words with the raw cron and its zone, the next run, the last run and
-its result, and whether it is on. Selecting a row shows its runs and output.
+its result, and whether it is on. Selecting a row shows its runs; click a run to read its whole output
+(ai-space keeps the first 4,000 characters).
+
+**A run's conversation.** When a command job starts Claude Code, have it print the session it started
+on a line of its own near the top of its output, and the run gets a 对话记录 / Conversation button that
+shows what was asked, each tool call with its result, and the answers:
+
+```bash
+SID=$(cat /proc/sys/kernel/random/uuid)     # or: uuidgen | tr A-Z a-z
+echo "claude-session: $SID"
+claude -p "$PROMPT" --session-id "$SID"
+```
+
+The session is read on the machine the job ran on, from Claude Code's own folder; once Claude Code
+has removed an old session the button says so.
 
 The **AI assistant** on the right does the same things by chat: "every weekday at 08:30 Los Angeles
 time run `bun scripts/report.ts`", "pause the export", "run ping now", "why did ping fail?". Deleting a job always waits for you to press 确认删除 / Confirm.

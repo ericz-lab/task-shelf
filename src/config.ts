@@ -1,4 +1,5 @@
-import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 
 const env = (k: string, d = "") => (process.env[k] ?? d).trim();
 const num = (k: string, d: number) => { const v = env(k); const n = Number(v); return v !== "" && Number.isFinite(n) ? n : d; };
@@ -21,6 +22,8 @@ export const config = {
   /** Zone for new jobs when neither the person nor the page gives one (docs/time.md: documented default). */
   defaultZone: env("SHELF_DEFAULT_TZ", "UTC"),
   assistantTimeoutMs: num("SHELF_ASSISTANT_TIMEOUT_MS", 120_000),
+  /** Claude Code's folder on this machine: where the session a run names is read from (src/transcript.ts). */
+  claudeDir: env("CLAUDE_CONFIG_DIR") || join(homedir(), ".claude"),
 };
 
 /**

@@ -15,6 +15,7 @@ import { type Lang, scheduleText } from "./describe.ts";
 import { JobError, Shelf } from "./jobs.ts";
 import { type Machines, type RemoteRequest, callerAllowed, forwarder, machineFinder, readRemote } from "./remote.ts";
 import { ScheduleError, isZone, nextRuns, parseSchedule } from "./schedule.ts";
+import { readTranscript, sessionOf } from "./transcript.ts";
 import { httpSpace, modelClient, type ModelFn, type SpaceApi, type SpaceRun } from "./space.ts";
 
 export interface ServerOptions {
@@ -26,6 +27,8 @@ export interface ServerOptions {
   machine?: string;
   machineZone?: string;
   dataDir?: string;
+  /** Claude Code's folder, where a run's session is read from. */
+  claudeDir?: string;
   /** false: no page, for tests. */
   web?: boolean;
   /** Peers running this app, and how to reach one; absent: this machine only. */
@@ -153,7 +156,25 @@ export function createServer(opts: ServerOptions) {
           const { rows } = await overview();
           const row = rows.find((r) => r.key === req.params.key);
           if (!row) return fail("not-found", "no such task", 404);
-          return json({ ok: true, runs: await runsOf(row, limit) });
+          // `session`: the Claude Code session the run's output names; its conversation is the route below.
+          return json({ ok: true, runs: (await runsOf(row, limit)).map((r) => { const session = sessionOf(r.output); return session ? { ...r, session } : r; }) });
+        } catch (e) { return failure(e); }
+      },
+
+      // The conversation of one run: only the session that run's own output names is read.
+      "/api/rows/:key/transcript": async (req) => {
+        try {
+          const q = new URL(req.url).searchParams;
+          const { rows } = await overview();
+          const row = rows.find((r) => r.key === req.params.key);
+          if (!row) return fail("not-found", "no such task", 404);
+          const run = (await runsOf(row, 50)).find((r) => r.taskId === q.get("task") && String(r.id) === q.get("run"));
+          if (!run) return fail("not-found", "no such run", 404);
+          const session = sessionOf(run.output);
+          if (!session) return fail("no-transcript", "this run names no session", 404);
+          const transcript = await readTranscript(opts.claudeDir ?? config.claudeDir, session);
+          if (!transcript) return fail("transcript-gone", "this machine no longer has the session", 404);
+          return json({ ok: true, ...transcript });
         } catch (e) { return failure(e); }
       },
 

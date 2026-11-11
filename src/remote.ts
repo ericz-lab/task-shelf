@@ -15,7 +15,7 @@ type Method = "GET" | "POST" | "PATCH";
 const ROUTES: [Method[], RegExp][] = [
   [["GET"], /^\/api\/meta$/],
   [["GET"], /^\/api\/overview$/],
-  [["GET"], /^\/api\/rows\/[^/]+\/runs$/],
+  [["GET"], /^\/api\/rows\/[^/]+\/(runs|transcript)$/],
   [["GET", "POST"], /^\/api\/jobs$/],
   [["GET", "PATCH"], /^\/api\/jobs\/\d+$/],
   [["POST"], /^\/api\/jobs\/\d+\/(pause|resume|run|archive|restore)$/],
