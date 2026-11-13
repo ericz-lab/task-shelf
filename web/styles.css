@@ -23,6 +23,67 @@
 /* the app's own icon in the brand (kit .sp-logo gives the size and radius; the picture carries its own plate) */
 .app-logo { display:block;background:none;object-fit:cover }
 
+/* ---- the left column */
+/* Rows: a 16px line icon (grey; the accent when its row is selected), the name, the count. */
+.sp-nitem { justify-content:flex-start;outline-offset:-2px;transition:background-color .12s ease-out,color .12s ease-out }
+.sp-nitem .nl { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.sp-nitem .ni { color:var(--muted);transition:color .12s ease-out }
+.sp-nitem[aria-pressed="true"] .ni { color:var(--accent) }
+.sp-nc { display:inline-flex;align-items:center;gap:5px;flex:none;font-variant-numeric:tabular-nums }
+/* 已归档 sits one grey lower than 任务: deleted jobs, kept. */
+.nav-quiet:not(:hover):not([aria-pressed="true"]) { color:var(--muted) }
+.nav-quiet:not([aria-pressed="true"]) .ni { color:var(--faint) }
+
+/* The selected view: one wash that slides from the row left to the row chosen (placeInd in app.ts). A row it
+   covers drops its own wash; without the script the kit's rule still marks the row. */
+.sp-side-scroll { position:relative }
+.sp-ngroup { position:relative;z-index:1 }
+.nav-ind { position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-well);background:var(--accent-wash);opacity:0;pointer-events:none;
+  transition:transform .2s ease-out,width .2s ease-out,height .2s ease-out,opacity .12s ease-out }
+.nav-ind.snap { transition:none }
+.sp-nitem.ind-on,.sp-nitem.ind-on:hover { background:var(--clear) }
+
+/* 机器 is the scope, not a view: the machine shown is bold with a ring round its dot, and takes no wash. */
+#machine-nav .sp-nitem[aria-pressed="true"] { background:var(--clear);font-weight:600 }
+#machine-nav .sp-nitem[aria-pressed="true"]:hover { background:var(--hover) }
+.mdot { display:grid;place-items:center;width:16px;height:16px;flex:none }
+.mdot i { width:8px;height:8px;border-radius:50%;background:var(--st);transition:box-shadow .2s ease-out }
+.mdot.on { --st:var(--ok) } .mdot.bad { --st:var(--bad) }
+.sp-nitem[aria-pressed="true"] .mdot i { box-shadow:0 0 0 3px color-mix(in srgb, var(--st) 24%, var(--clear)) }
+/* The dot breathes only while its machine's overview is read or one of its tasks runs. */
+.mdot.busy i { animation:breathe 1.8s ease-in-out infinite }
+@keyframes breathe { 50% { opacity:.45;transform:scale(.8) } }
+.sp-nitem .nl.mname { display:flex;align-items:center;gap:6px }
+.mname .mn { min-width:0;overflow:hidden;text-overflow:ellipsis }
+.mtag { flex:none;height:16px;padding:0 6px;border-radius:var(--r-pill);background:var(--pill);color:var(--muted);font-size:11px;line-height:16px;font-weight:400 }
+.sp-nc.bad { color:var(--bad-tx) }
+
+/* Counts: 任务 wears a pill, red while one of its jobs is failing; 已归档's stays quiet grey. */
+#n-jobs:not(:empty) { height:18px;padding:0 7px;border-radius:var(--r-pill);background:var(--pill);color:var(--ink);font-weight:500;transition:background-color .2s ease-out,color .2s ease-out }
+#n-jobs.bad { background:var(--bad-bg);color:var(--bad-tx) }
+/* A number that changed rolls one line: the old one leaves, the new one follows it in (numHtml in app.ts). */
+.num { position:relative;display:inline-block;height:18px;line-height:18px;overflow:hidden }
+.num > span { display:block }
+.num.roll { --in:100%;--out:-100% }
+.num.roll.down { --in:-100%;--out:100% }
+.num.roll > span { animation:roll-in .2s ease-out var(--roll-at, 0ms) both }
+.num.roll::before { content:attr(data-prev);position:absolute;inset:0;text-align:right;animation:roll-out .2s ease-out var(--roll-at, 0ms) both }
+@keyframes roll-in { from { transform:translateY(var(--in)) } }
+@keyframes roll-out { to { transform:translateY(var(--out)) } }
+
+/* A group folds under its label: the height eases shut and the arrow turns. */
+.ng-toggle { display:flex;align-items:center;gap:2px;width:100%;border:0;background:var(--clear);text-align:left;border-radius:var(--r-mark) }
+.ng-toggle:hover { color:var(--ink) }
+.ng-toggle .chev { width:12px;height:12px;opacity:0;transition:transform .2s ease-out,opacity .12s ease-out }
+.ng-toggle:hover .chev,.ng-toggle:focus-visible .chev,.sp-ngroup.closed .chev { opacity:1 }
+.sp-ngroup.closed .chev { transform:rotate(-90deg) }
+.ng-body { display:grid;grid-template-rows:1fr;transition:grid-template-rows .2s ease-out }
+.ng-body > ul { min-height:0;overflow:hidden }
+.sp-ngroup.closed .ng-body { grid-template-rows:0fr }
+.sp-side-scroll.booting .ng-body,.sp-side-scroll.booting .chev { transition:none }
+@media (hover: none) { .ng-toggle .chev { opacity:1 } }
+@media (prefers-reduced-motion: reduce) { .num.roll::before { display:none } }
+
 /* ---- heading: the view, then enabled count, next run, machine */
 .head-title { display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 20px;min-width:0 }
 .sum { display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;color:var(--muted);font-size:12px }

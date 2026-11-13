@@ -53,16 +53,20 @@
       <span class="sp-kbd" aria-hidden="true">/</span>
     </div>
     <div class="sp-side-scroll">
-      <div class="sp-ngroup" id="machine-group" hidden>
-        <div class="sp-nlabel" id="g-machine" data-i18n="navMachine">机器</div>
+      <div class="sp-ngroup ng-machines" data-group="machines" id="machine-group" hidden>
+        <button type="button" class="sp-nlabel ng-toggle" id="g-machine" aria-expanded="true" aria-controls="ng-machines"><span data-i18n="navMachine">机器</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="ng-body" id="ng-machines">
         <ul id="machine-nav" aria-labelledby="g-machine"></ul>
+        </div>
       </div>
-      <div class="sp-ngroup">
-        <div class="sp-nlabel" id="g-view" data-i18n="navView">视图</div>
+      <div class="sp-ngroup ng-views" data-group="views">
+        <button type="button" class="sp-nlabel ng-toggle" id="g-view" aria-expanded="true" aria-controls="ng-views"><span data-i18n="navView">视图</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="ng-body" id="ng-views">
         <ul aria-labelledby="g-view">
-          <li><button type="button" class="sp-nitem" data-tab="jobs" aria-pressed="true" data-i18n-title="tabJobsHint"><span data-i18n="tabJobs">任务</span><span class="sp-nc n">0</span></button></li>
-          <li><button type="button" class="sp-nitem" data-tab="archived" aria-pressed="false" data-i18n-title="tabArchivedHint"><span data-i18n="tabArchived">已归档</span><span class="sp-nc n">0</span></button></li>
+          <li><button type="button" class="sp-nitem" data-tab="jobs" aria-pressed="true" data-i18n-title="tabJobsHint"><svg class="ic ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="nl" data-i18n="tabJobs">任务</span><span class="sp-nc n" id="n-jobs"></span></button></li>
+          <li><button type="button" class="sp-nitem nav-quiet" data-tab="archived" aria-pressed="false" data-i18n-title="tabArchivedHint"><svg class="ic ni" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg><span class="nl" data-i18n="tabArchived">已归档</span><span class="sp-nc n" id="n-archived"></span></button></li>
         </ul>
+        </div>
       </div>
     </div>
     <div class="sp-side-foot">
