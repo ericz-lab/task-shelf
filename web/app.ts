@@ -248,8 +248,14 @@ function renderTabs() {
   for (const b of $$("[data-tab]")) {
     const k = b.dataset.tab as keyof typeof n;
     b.setAttribute("aria-pressed", String(S.tab === k));
-    $(".n", b).textContent = String(n[k]);
+    $(".n", b).innerHTML = numHtml(`tab:${k}`, n[k]);
   }
+  // 任务 wears a pill, red while one of its jobs is failing; 已归档's count stays quiet grey.
+  const failing = S.rows.filter((r) => inScope(r, "jobs") && matches(r, "failing")).length;
+  const jobsN = $("#n-jobs");
+  jobsN.classList.toggle("bad", failing > 0);
+  jobsN.title = failing ? t("sumFailing", { n: failing }) : "";
+  if (failing) jobsN.setAttribute("aria-label", `${n.jobs}, ${t("sumFailing", { n: failing })}`); else jobsN.removeAttribute("aria-label");
   const scoped = S.rows.filter((r) => inScope(r));
   for (const b of $$("[data-f]")) {
     const f = (b.dataset.f || null) as typeof S.filter;
@@ -260,13 +266,106 @@ function renderTabs() {
   const group = $("#machine-group");
   group.hidden = !multi();
   if (multi()) {
+    // 机器 is the scope, not a view: one status dot per machine (no icon), 本机 a tag after its name.
     const m = machineFilter();
-    const item = (via: string | null, label: string, mono: boolean, error: string | null) =>
-      `<li><button type="button" class="sp-nitem" data-machine="${via === null ? "*" : esc(via)}" aria-pressed="${m === via}"><span class="${mono ? "mono" : ""}">${esc(label)}</span>${error ? `<span class="sp-dot bad" title="${esc(error)}"></span>` : ""}</button></li>`;
-    const html = item(null, t("navAll"), false, null) + S.machines.map((x) => item(x.via, x.name, true, x.error)).join("");
+    const all = `<li><button type="button" class="sp-nitem" data-machine="*" aria-pressed="${m === null}">${navIcon("layers")}<span class="nl">${esc(t("navAll"))}</span></button></li>`;
+    const html = all + S.machines.map((x) => `<li><button type="button" class="sp-nitem" data-machine="${esc(x.via)}" aria-pressed="${m === x.via}"${x.error ? ` title="${esc(x.error)}"` : ""}><span class="mdot ${x.error ? "bad" : "on"}" role="img" aria-label="${esc(t(x.error ? "mFailed" : "mOnline"))}"><i></i></span><span class="nl mname"><span class="mono mn">${esc(x.name)}</span>${x.via ? "" : `<span class="mtag">${esc(t("navThisOne"))}</span>`}</span>${x.error ? `<span class="sp-nc bad">${esc(t("mFailedShort"))}</span>` : ""}</button></li>`).join("");
     const list = $("#machine-nav");
     if (list.dataset.html !== html) { list.innerHTML = html; list.dataset.html = html; }
   }
+  markBusy();
+  if (S.loaded) numsStill = false;
+  placeInd();
+}
+
+/** The left column's line icons drawn from code (the static rows carry theirs in index.html). */
+const NAV_ICON = { layers: '<path d="m12 4 8.5 4.5L12 13 3.5 8.5Z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/>' };
+const navIcon = (name: keyof typeof NAV_ICON) => `<svg class="ic ni" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICON[name]}</svg>`;
+
+/**
+ * A count that rolls one line when its number changes: the old one leaves upward as the new one follows it in
+ * (downward for a smaller number). The column is redrawn on every load, so a roll under way is resumed at the
+ * point it had reached (`--roll-at`), not started again. Numbers that change because another machine is shown
+ * (or the first load arrives) are set without a roll: `numsStill`.
+ */
+const ROLL_MS = 200;
+const nums = new Map<string, { v: number; prev: number; at: number }>();
+let numsStill = true;
+function numHtml(key: string, v: number): string {
+  const now = performance.now();
+  let s = nums.get(key);
+  if (!s) nums.set(key, s = { v, prev: v, at: -ROLL_MS });
+  else if (s.v !== v) nums.set(key, s = { v, prev: s.v, at: numsStill ? -ROLL_MS : now });
+  if (!v) return "";
+  const gone = now - s.at;
+  if (gone >= ROLL_MS) return `<span class="num"><span>${v}</span></span>`;
+  return `<span class="num roll${v < s.prev ? " down" : ""}" data-prev="${s.prev || ""}" style="--roll-at:-${Math.round(gone)}ms"><span>${v}</span></span>`;
+}
+
+/** The machines whose overview is being read right now (load). */
+const reading = new Set<string>();
+/** A machine is busy while its overview is read or one of its tasks runs: its dot breathes, still otherwise. */
+const machineBusy = (via: string) => reading.has(via) || S.rows.some((r) => r.via === via && r.running);
+/** The dots follow what the machines do without the list being redrawn. */
+function markBusy() {
+  for (const d of $$("#machine-nav [data-machine] .mdot")) d.classList.toggle("busy", machineBusy(d.closest<HTMLElement>("[data-machine]")!.dataset.machine ?? ""));
+}
+
+/**
+ * The wash behind the selected view: one element that slides to the row chosen. It lies under the rows of the
+ * scrolling part and is placed from the row's box; machines (the scope) and rows in a folded group take none.
+ */
+const sideScroll = $(".sp-side-scroll");
+const navInd = document.createElement("div");
+navInd.className = "nav-ind snap";
+navInd.setAttribute("aria-hidden", "true");
+sideScroll.prepend(navInd);
+function placeInd(slide = true) {
+  const row = $$('.sp-nitem[aria-pressed="true"]', sideScroll).find((b) => !b.closest("#machine-nav"));
+  for (const x of $$(".ind-on", sideScroll)) if (x !== row) x.classList.remove("ind-on");
+  const box = row?.getBoundingClientRect();
+  if (!row || !box || box.height < 8 || row.closest(".sp-ngroup.closed")) {
+    row?.classList.remove("ind-on");
+    navInd.classList.add("snap");
+    navInd.style.opacity = "0";
+    return;
+  }
+  const home = sideScroll.getBoundingClientRect();
+  // The first placing, and one that follows a layout change (a group folding, a resize), does not slide.
+  navInd.classList.toggle("snap", !slide || navInd.style.opacity !== "1");
+  navInd.style.width = `${box.width}px`;
+  navInd.style.height = `${box.height}px`;
+  navInd.style.transform = `translate(${box.left - home.left + sideScroll.scrollLeft}px, ${box.top - home.top + sideScroll.scrollTop}px)`;
+  navInd.style.opacity = "1";
+  row.classList.add("ind-on");
+}
+// Rows move when a group folds, the machines appear or the column is resized: the wash keeps to its row.
+const navWatch = new ResizeObserver(() => placeInd(false));
+for (const g of $$(".sp-ngroup", sideScroll)) navWatch.observe(g);
+navWatch.observe(sideScroll);
+
+// Folding a group: its label is the switch; which ones are folded is kept in this browser.
+{
+  const KEY = "task-shelf.side-folded";
+  let folded: string[] = [];
+  try { const v: unknown = JSON.parse(store.get(KEY) ?? "[]"); if (Array.isArray(v)) folded = v.filter((x): x is string => typeof x === "string"); } catch { /* not a list */ }
+  const set = (g: HTMLElement, closed: boolean) => {
+    g.classList.toggle("closed", closed);
+    $(".ng-toggle", g).setAttribute("aria-expanded", String(!closed));
+    $(".ng-body", g).inert = closed;
+  };
+  sideScroll.classList.add("booting");
+  for (const g of $$(".sp-ngroup[data-group]", sideScroll)) {
+    const key = g.dataset.group!;
+    if (folded.includes(key)) set(g, true);
+    $(".ng-toggle", g).onclick = () => {
+      const closed = !g.classList.contains("closed");
+      set(g, closed);
+      folded = closed ? [...folded, key] : folded.filter((x) => x !== key);
+      store.set(KEY, JSON.stringify(folded));
+    };
+  }
+  requestAnimationFrame(() => requestAnimationFrame(() => sideScroll.classList.remove("booting")));
 }
 
 function renderList() {
@@ -433,7 +532,9 @@ async function load() {
   try {
     const m = await api<{ local: string; peers: string[] }>("/api/machines").catch(() => ({ local: "", peers: [] as string[] }));
     const vias = ["", ...m.peers];
-    const got = await Promise.all(vias.map((via) => api<Overview>(on(via, "/api/overview")).then((d) => ({ via, d, e: null as string | null }), (e) => ({ via, d: null, e: errText(e) }))));
+    for (const via of vias) reading.add(via);
+    markBusy();
+    const got = await Promise.all(vias.map((via) => api<Overview>(on(via, "/api/overview")).then((d) => ({ via, d, e: null as string | null }), (e) => ({ via, d: null, e: errText(e) })).finally(() => { reading.delete(via); markBusy(); })));
     if (!got[0]!.d) throw new Error(got[0]!.e ?? "");
     const machines: Machine[] = [];
     const rows: Row[] = [];
@@ -760,6 +861,8 @@ $("#machine-nav").addEventListener("click", (e) => {
   const b = (e.target as HTMLElement).closest<HTMLElement>("[data-machine]");
   if (!b) return;
   S.machine = b.dataset.machine === "*" ? null : b.dataset.machine!;
+  // The counts change because another machine is shown, not because a job did: no roll.
+  numsStill = true;
   writeUrl(); render(); closeDrawers();
 });
 
