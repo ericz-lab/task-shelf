@@ -3,6 +3,8 @@
 A home for small scheduled jobs that have no app of their own: a nightly export script, an hourly
 HTTP ping, a daily AI prompt. You keep them here; ai-space's scheduler runs them.
 
+> **Works best with [ai-space](https://github.com/ericz-lab/ai-space) · 配合 ai-space 使用效果更佳.** Task Shelf is an ai-space app and needs a space to do its work: the jobs are ai-space tasks, so the space's scheduler runs them and keeps their run history, its model service answers the assistant and the AI-prompt jobs, and its panel, notifications and peers show the jobs of every machine.
+
 The tasks page shows only the jobs kept here. Tasks of other apps and ai-space's own tasks
 (`space/*`, every app's `backup`) are left out: their own app or ai-space looks after them.
 
@@ -53,3 +55,7 @@ the built-in window, notifications and run history see them too.
 
 Schedules: a 5-field cron with its time zone, a fixed interval (at least 1 minute), or one time at a
 date and time in a zone.
+
+## License
+
+[MIT](LICENSE)
