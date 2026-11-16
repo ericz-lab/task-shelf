@@ -5,6 +5,7 @@
  */
 import { durationText, type Lang, runDuration, scheduleText } from "../src/describe.ts";
 import { applyTranslations, tr } from "./i18n.ts";
+import { nextRead } from "./refresh.ts";
 
 type Schedule = { kind: "manual" } | { kind: "at"; at: string; tz?: string } | { kind: "every"; everyMs: number; anchorMs?: number } | { kind: "cron"; expr: string; tz?: string };
 interface Row {
@@ -402,7 +403,7 @@ function renderList() {
 // ---------------------------------------------------------------- detail
 
 let detailFor = "";
-async function renderDetail() {
+async function renderDetail(asked?: Set<string>) {
   const box = $("#detail");
   const r = S.rows.find((x) => x.uid === S.sel);
   if (!r) { box.hidden = true; box.innerHTML = ""; detailFor = ""; document.body.classList.remove("has-detail"); return; }
@@ -423,7 +424,9 @@ async function renderDetail() {
          <button type="button" class="sp-btn" data-act="delete" data-id="${r.jobId}"${via} ${writable ? "" : "disabled"}>${icon("i-trash")}<span>${esc(t("del"))}</span></button>`
     : `<span class="lock">${icon("i-lock")}<span>${esc(r.owner === "system" ? t("readOnlySystem") : t("readOnlyBy", { app: appLabel(r) }))}</span></span>`;
   const st = statusOf(r);
-  const keep = detailFor === r.uid ? $("#d-runs", box)?.innerHTML : "";
+  const same = detailFor === r.uid;
+  const keep = same ? $("#d-runs", box)?.innerHTML : "";
+  const keepChanges = same ? $("#d-changes", box)?.innerHTML ?? "" : "";
   const words = r.schedule ? scheduleText(r.schedule.kind === "at" ? { ...r.schedule, tz: r.zone ?? undefined } : r.schedule, S.lang) : "—";
   const fact = (label: string, value: string, mono = false, title = "") => `<dt>${esc(label)}</dt><dd${mono ? ' class="mono"' : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd>`;
   box.innerHTML = `<header class="d-head"><div class="d-title"><h2 class="sp-tt"><span class="sp-sq" aria-hidden="true"></span><span class="mono">${esc(r.name)}</span></h2>${st.cls === "none" ? "" : badge(st.cls, st.text)}</div><div class="d-btns">${btns}<button type="button" class="sp-icon-btn" data-act="close-detail" aria-label="${esc(t("close"))}" title="${esc(t("close"))}">${icon("i-x")}</button></div></header>
@@ -442,9 +445,11 @@ async function renderDetail() {
     </div>
     ${r.lastError ? `<div class="sp-banner bad d-err">${icon("i-x")}<span class="grow"><b>${esc(t("stError"))}</b> <span class="mono">${esc(r.lastError)}</span></span></div>` : ""}
     <section class="d-sec"><h3 class="d-sec-h"><span>${esc(t("dRuns"))}</span><span class="sp-small sp-muted">${esc(t("dRunsLast", { n: 10 }))}</span></h3><div id="d-runs" class="runs">${keep || `<p class="dim">${esc(t("loading"))}</p>`}</div></section>
-    ${mine ? `<section class="d-sec"><h3 class="d-sec-h"><span>${esc(t("dChanges"))}</span></h3><ol id="d-changes" class="changes"></ol></section>` : ""}`;
+    ${mine ? `<section class="d-sec"><h3 class="d-sec-h"><span>${esc(t("dChanges"))}</span></h3><ol id="d-changes" class="changes">${keepChanges}</ol></section>` : ""}`;
   detailFor = r.uid;
   const key = r.uid;
+  // A quick read of other machines leaves this row's runs as they were.
+  if (same && keep && asked && !asked.has(r.via)) return;
   try {
     const { runs } = await api<{ runs: Run[] }>(on(r.via, `/api/rows/${encodeURIComponent(r.key)}/runs?limit=10`));
     if (S.sel !== key) return;
@@ -526,15 +531,40 @@ function entryHtml(e: TxEntry): string {
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 type Overview = { rows: Row[]; counts: Counts; nextUp: Row | null; machine: string; writable: boolean; spaceError: string | null };
+type Answer = { via: string; d: Overview | null; e: string | null };
 
-/** Every machine's overview, read side by side; a machine that does not answer keeps its place with the error. */
-async function load() {
+/** Each machine's last answer and this machine's name, kept so a quick read asks only the machines with work running. */
+let answers: Answer[] = [];
+let localName = "";
+let lastFull = 0;
+
+/**
+ * Every machine's overview, read side by side; a machine that does not answer keeps its place with the error.
+ * With `only`, just those machines are read and the others keep their last answer.
+ */
+async function load(only: string[] | null = null) {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  let asked: Set<string> | undefined;
   try {
-    const m = await api<{ local: string; peers: string[] }>("/api/machines").catch(() => ({ local: "", peers: [] as string[] }));
-    const vias = ["", ...m.peers];
-    for (const via of vias) reading.add(via);
+    let vias: string[];
+    if (only && answers.length) {
+      vias = answers.map((a) => a.via);
+    } else {
+      only = null;
+      const m = await api<{ local: string; peers: string[] }>("/api/machines").catch(() => ({ local: "", peers: [] as string[] }));
+      localName = m.local;
+      vias = ["", ...m.peers];
+    }
+    asked = new Set(only ?? vias);
+    for (const via of asked) reading.add(via);
     markBusy();
-    const got = await Promise.all(vias.map((via) => api<Overview>(on(via, "/api/overview")).then((d) => ({ via, d, e: null as string | null }), (e) => ({ via, d: null, e: errText(e) })).finally(() => { reading.delete(via); markBusy(); })));
+    const kept = new Map(answers.map((a) => [a.via, a]));
+    const got = await Promise.all(vias.map((via): Promise<Answer> => (!asked!.has(via) && kept.has(via)
+      ? Promise.resolve(kept.get(via)!)
+      : api<Overview>(on(via, "/api/overview")).then((d) => ({ via, d, e: null }), (e) => ({ via, d: null, e: errText(e) })).finally(() => { reading.delete(via); markBusy(); }))));
+    answers = got;
+    if (!only) lastFull = Date.now();
     if (!got[0]!.d) throw new Error(got[0]!.e ?? "");
     const machines: Machine[] = [];
     const rows: Row[] = [];
@@ -542,7 +572,7 @@ async function load() {
     const nexts: Row[] = [];
     for (const g of got) {
       // A peer goes by the name this space gives it; this machine by its own.
-      const name = g.via || g.d?.machine || m.local;
+      const name = g.via || g.d?.machine || localName;
       machines.push({ via: g.via, name, writable: Boolean(g.d?.writable), error: g.e ?? g.d?.spaceError ?? null });
       if (!g.d) continue;
       for (const r of g.d.rows) rows.push({ ...r, via: g.via, uid: g.via ? `${g.via}:${r.key}` : r.key });
@@ -556,16 +586,29 @@ async function load() {
     S.loaded = true;
     S.loadError = errText(e);
   }
-  render();
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(load, S.rows.some((r) => r.running) ? 4000 : 20_000);
+  render(asked);
+  schedule();
 }
 
-function render() {
+/** The next read, by web/refresh.ts; none while the page is hidden. */
+function schedule() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  const next = nextRead({ now: Date.now(), lastFull, live: S.rows.filter((r) => r.running).map((r) => r.via), hidden: document.hidden });
+  if (next) timer = setTimeout(() => void load(next.only), next.wait);
+}
+
+// A hidden page stops reading the machines; shown again, it reads them all at once.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { if (timer) clearTimeout(timer); timer = null; } else void load();
+});
+
+/** `asked`: the machines just read; the detail of a row on another one keeps its runs instead of reading them again. */
+function render(asked?: Set<string>) {
   renderSummary();
   renderTabs();
   renderList();
-  void renderDetail();
+  void renderDetail(asked);
 }
 
 function toast(text: string, err = false) {

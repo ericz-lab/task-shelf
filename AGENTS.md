@@ -36,7 +36,7 @@ src/transcript.ts    * a run's conversation: the `claude-session: <uuid>` line i
 src/remote.ts        * one page over several machines: the `ops` capability, the machine list, forwarding to a peer
 src/config.ts          environment, operator credential lookup
 src/testing.ts         in-memory ai-space for tests
-web/index.html         the page shell; app.ts the logic; i18n.ts the zh/en strings; styles.css the look; kit.css the kit copy
+web/index.html         the page shell; app.ts the logic; refresh.ts when it reads the machines again; i18n.ts the zh/en strings; styles.css the look; kit.css the kit copy
 deploy/post-receive    bare-repository hook: `space app deploy`
 ```
 
