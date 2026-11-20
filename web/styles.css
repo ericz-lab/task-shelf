@@ -280,7 +280,7 @@
   .f-row.two,.f-row.method { grid-template-columns:1fr }
   .check-row { min-height:44px }
   .sp-seg.filters { display:flex;width:100%;overflow-x:auto }
-  .sp-seg.filters button { flex:1 0 auto }
+  .sp-seg.filters button { flex:1 0 auto;padding:0 8px }
   .d-btns { width:100% }
   .mach-pick { height:36px }
   .sp-composer { padding-bottom:max(12px, env(safe-area-inset-bottom)) }

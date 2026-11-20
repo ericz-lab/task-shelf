@@ -32,6 +32,7 @@ export const DICT: Record<string, { zh: string; en: string }> = {
   tabJobsHint: { zh: "收纳在这里、由 ai-space 运行的任务", en: "Jobs kept here, run by ai-space" },
   tabArchivedHint: { zh: "删除后归档的任务，可以恢复", en: "Deleted jobs, kept and restorable" },
   filtersAria: { zh: "按状态筛选", en: "Filter by state" },
+  fOn: { zh: "启用", en: "On" },
   fFailing: { zh: "失败", en: "Failing" },
   fPaused: { zh: "已暂停", en: "Paused" },
   fRunning: { zh: "运行中", en: "Running" },

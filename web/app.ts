@@ -42,10 +42,16 @@ const store = {
 const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; } })();
 
 const params = new URLSearchParams(location.search);
+type Filter = null | "on" | "failing" | "paused" | "running";
+type Tab = "jobs" | "archived";
+/** A view opens on its first status filter: 启用 for jobs; archived jobs are all off, so 全部 there. */
+const defaultFilter = (tab: Tab): Filter => (tab === "jobs" ? "on" : null);
+const initialTab: Tab = params.get("tab") === "archived" ? "archived" : "jobs";
+const fParam = params.get("f") ?? "";
 const S = {
   lang: (document.documentElement.lang.startsWith("zh") ? "zh" : "en") as Lang,
-  tab: (params.get("tab") === "archived" ? "archived" : "jobs") as "jobs" | "archived",
-  filter: (["failing", "paused", "running"].includes(params.get("f") ?? "") ? params.get("f") : null) as null | "failing" | "paused" | "running",
+  tab: initialTab,
+  filter: (fParam === "all" ? null : ["on", "failing", "paused", "running"].includes(fParam) ? fParam : defaultFilter(initialTab)) as Filter,
   q: params.get("q") ?? "",
   /** The machine the list is narrowed to ("" for this machine), or null for all. */
   machine: params.get("m"),
@@ -71,7 +77,7 @@ const locale = () => (S.lang === "zh" ? "zh-CN" : "en-US");
 function writeUrl() {
   const p = new URLSearchParams();
   if (S.tab !== "jobs") p.set("tab", S.tab);
-  if (S.filter) p.set("f", S.filter);
+  if (S.filter !== defaultFilter(S.tab)) p.set("f", S.filter ?? "all");
   if (S.q) p.set("q", S.q);
   if (S.machine !== null) p.set("m", S.machine);
   if (S.sel) p.set("sel", S.sel);
@@ -172,7 +178,7 @@ const machineFilter = () => (S.machine !== null && multi() && machineOf(S.machin
 const inMachine = (r: Row) => { const m = machineFilter(); return m === null || r.via === m; };
 const inScope = (r: Row, tab = S.tab) => (tab === "archived") === r.archived && inMachine(r);
 const matches = (r: Row, f: typeof S.filter) =>
-  f === "failing" ? (r.enabled && r.lastStatus === "error") || (!r.registered && !r.archived) : f === "paused" ? !r.enabled : f === "running" ? r.running : true;
+  f === "on" ? r.enabled : f === "failing" ? (r.enabled && r.lastStatus === "error") || (!r.registered && !r.archived) : f === "paused" ? !r.enabled : f === "running" ? r.running : true;
 
 function visibleRows(): Row[] {
   const q = S.q.trim().toLowerCase();
@@ -388,7 +394,7 @@ function renderList() {
     state.innerHTML = `<div class="sp-banner bad">${icon("i-x")}<span class="grow">${esc(msg)}</span><button type="button" class="sp-btn sm" data-act="reload">${esc(t("retry"))}</button></div>`;
   } else if (!rows.length) {
     state.dataset.state = "empty";
-    const plain = !S.q && !S.filter;
+    const plain = !S.rows.some((r) => inScope(r));
     state.innerHTML = `<div class="sp-state"><p>${esc(plain ? t(S.tab === "archived" ? "emptyArchived" : "emptyMine") : t("emptyFilter"))}</p>${S.tab === "jobs" && S.machines.some((m) => m.writable) ? `<button type="button" class="sp-btn" data-act="new">${icon("i-plus")}<span>${esc(t("newJob"))}</span></button>` : ""}</div>`;
   } else {
     state.dataset.state = "";
@@ -898,7 +904,12 @@ for (const b of $$("[data-lang]")) b.addEventListener("click", () => { S.lang = 
 $("#theme").addEventListener("click", cycleTheme);
 $<HTMLInputElement>("#q").value = S.q;
 $("#q").addEventListener("input", (e) => { S.q = (e.target as HTMLInputElement).value; writeUrl(); renderList(); });
-for (const b of $$("[data-tab]")) b.addEventListener("click", () => { S.tab = b.dataset.tab as typeof S.tab; writeUrl(); render(); closeDrawers(); });
+for (const b of $$("[data-tab]")) b.addEventListener("click", () => {
+  const tab = b.dataset.tab as Tab;
+  // A filter left at the view's default follows the view (启用 shows nothing among archived jobs).
+  if (tab !== S.tab && S.filter === defaultFilter(S.tab)) S.filter = defaultFilter(tab);
+  S.tab = tab; writeUrl(); render(); closeDrawers();
+});
 for (const b of $$("[data-f]")) b.addEventListener("click", () => { S.filter = (b.dataset.f || null) as typeof S.filter; writeUrl(); render(); });
 $("#machine-nav").addEventListener("click", (e) => {
   const b = (e.target as HTMLElement).closest<HTMLElement>("[data-machine]");
