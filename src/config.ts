@@ -17,8 +17,11 @@ export const config = {
   /** Reads (tasks, runs, apps) and model calls go with the app's own token. */
   spaceAppToken: env("SPACE_APP_TOKEN"),
   dataDir: resolve(env("SPACE_APP_DATA_DIR", "data")),
-  /** Runtime for agent jobs (an ai-space runtime with the `agent` capability). */
-  agentRuntime: env("SHELF_AGENT_RUNTIME", "claude"),
+  /**
+   * Runtime for agent jobs that name no model (an ai-space runtime with the `agent` capability).
+   * Empty: the runtime of the Space's default model (src/index.ts follows it), else `claude`.
+   */
+  agentRuntime: env("SHELF_AGENT_RUNTIME"),
   /** Zone for new jobs when neither the person nor the page gives one (docs/time.md: documented default). */
   defaultZone: env("SHELF_DEFAULT_TZ", "UTC"),
   assistantTimeoutMs: num("SHELF_ASSISTANT_TIMEOUT_MS", 120_000),

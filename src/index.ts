@@ -29,6 +29,8 @@ export interface ServerOptions {
   dataDir?: string;
   /** Claude Code's folder, where a run's session is read from. */
   claudeDir?: string;
+  /** The runtime of agent jobs that name no model; default `SHELF_AGENT_RUNTIME`, else `claude`. */
+  agentRuntime?: string | (() => string);
   /** false: no page, for tests. */
   web?: boolean;
   /** Peers running this app, and how to reach one; absent: this machine only. */
@@ -64,7 +66,7 @@ export function createServer(opts: ServerOptions) {
   const machine = opts.machine ?? config.machine;
   const machineZone = opts.machineZone ?? serverZone();
   const log = opts.log ?? ((line: string) => console.log(`[task-shelf] ${new Date().toISOString()} ${line}`));
-  const shelf = new Shelf({ db, space, app, dataDir: opts.dataDir ?? config.dataDir, agentRuntime: config.agentRuntime, now });
+  const shelf = new Shelf({ db, space, app, dataDir: opts.dataDir ?? config.dataDir, agentRuntime: opts.agentRuntime ?? (config.agentRuntime || "claude"), now });
   const zoneOf = (v: unknown) => (isZone(v) ? v : config.defaultZone);
 
   /** Every row, or this app's jobs alone with the error when ai-space cannot be read. */
@@ -116,6 +118,8 @@ export function createServer(opts: ServerOptions) {
   let selfPort = 0;
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     hostname: "127.0.0.1",
+    // Bun's default, except that the bundled release (dist/index.js) always runs as production.
+    development: Bun.main.endsWith(".ts") && process.env.NODE_ENV !== "production",
     port: opts.port ?? config.port,
     idleTimeout: 255,
     routes: {
@@ -231,7 +235,15 @@ export function createServer(opts: ServerOptions) {
         }),
       },
     },
-    fetch: () => fail("not-found", "not found", 404),
+    fetch: (req) => {
+      // A bundled release (`bun run build`) serves its hashed pictures from beside the bundle; from source they are routes of the page.
+      const path = new URL(req.url).pathname;
+      if (/^\/[A-Za-z0-9_-]+-[a-z0-9]{8}\.(png|svg|webp|ico|jpg)$/.test(path)) {
+        const file = Bun.file(new URL(`.${path}`, import.meta.url).pathname);
+        return file.exists().then((ok) => (ok ? new Response(file, { headers: { "cache-control": "max-age=31536000, immutable" } }) : fail("not-found", "not found", 404)));
+      }
+      return fail("not-found", "not found", 404);
+    },
   });
   selfPort = server.port ?? 0;
 
@@ -239,13 +251,25 @@ export function createServer(opts: ServerOptions) {
 }
 
 if (import.meta.main) {
+  // The bundled release (dist/index.js) finds its page's files from the working directory: run in its own.
+  if (!Bun.main.endsWith(".ts")) process.chdir(import.meta.dir);
   const db = openDatabase(databasePath());
   const op = await operatorToken();
   const space = httpSpace({ apiUrl: config.spaceApiUrl, appToken: config.spaceAppToken, operatorToken: op });
   const model = modelClient({ apiUrl: config.spaceApiUrl, token: config.spaceAppToken });
   const machines = machineFinder({ apiUrl: config.spaceApiUrl, app: config.app, local: config.machine, token: config.spaceAppToken });
   const forward = forwarder({ apiUrl: config.spaceApiUrl, app: config.app, token: config.spaceAppToken });
-  const app = createServer({ db, space, model, machines, forward });
+  // Agent jobs without a model run on the runtime of the Space's default model unless SHELF_AGENT_RUNTIME names one.
+  let runtime = config.agentRuntime || "claude";
+  const follow = async () => {
+    const m = await space.defaultModel?.().catch(() => undefined);
+    if (m?.includes("/")) runtime = m.slice(0, m.indexOf("/"));
+  };
+  if (!config.agentRuntime) {
+    await follow();
+    setInterval(() => void follow(), 10 * 60_000).unref();
+  }
+  const app = createServer({ db, space, model, machines, forward, agentRuntime: () => runtime });
   console.log(`[task-shelf] listening on http://127.0.0.1:${app.port} · machine ${config.machine || "?"} (${serverZone()}) · writes ${op ? "on" : "off (no operator credential)"} · assistant ${model ? "on" : "off"}`);
   // A job whose ai-space task went missing (a lost write, a restored database) is put back.
   setTimeout(() => { app.reconcile().catch((e) => console.error(`[task-shelf] reconcile failed: ${(e as Error).message}`)); }, 3000);

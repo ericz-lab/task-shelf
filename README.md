@@ -31,6 +31,17 @@ has removed an old session the button says so.
 The **AI assistant** on the right does the same things by chat: "every weekday at 08:30 Los Angeles
 time run `bun scripts/report.ts`", "pause the export", "run ping now", "why did ping fail?". Deleting a job always waits for you to press 确认删除 / Confirm.
 
+## Install
+
+On an ai-space Space, from the panel's app catalog, or:
+
+```sh
+space app install task-shelf            # the signed package
+space app install task-shelf --source   # cloned to <workspace>/app-src/task-shelf and built on your machine
+```
+
+Agent jobs that name no model run on the runtime of the Space's default model; set `SHELF_AGENT_RUNTIME` in `<workspace>/data/task-shelf/.env` to pick one. Creating and changing jobs needs the operator credential, read from `<workspace>/run/operator-token` (or `SPACE_API_TOKEN` there).
+
 ## Several machines
 
 Install it on every machine whose scheduler should run jobs. The page on the hub shows the jobs of every

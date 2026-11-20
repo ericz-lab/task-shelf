@@ -24,6 +24,7 @@ How it differs from ai-space's built-in Tasks window (panel Settings → 定时�
 
 ```
 space.yaml           * the manifest: identity, service, model tier for the assistant, storage
+space.release.yaml   * the package's spec-2 declaration: the same components, launch and build
 src/index.ts         * the service: routes, overview, boot (reconcile after 3 s)
 src/jobs.ts          * Shelf: validate, create, update (in place or replace), pause/resume, run now, archive/restore, reconcile
 src/db.ts            * schema (jobs, run_archive, changes, chat, pending) and queries
@@ -38,6 +39,8 @@ src/config.ts          environment, operator credential lookup
 src/testing.ts         in-memory ai-space for tests
 web/index.html         the page shell; app.ts the logic; refresh.ts when it reads the machines again; i18n.ts the zh/en strings; styles.css the look; kit.css the kit copy
 deploy/post-receive    bare-repository hook: `space app deploy`
+scripts/pack.ts        the packages locally: ai-space's `space app release`
+.github/workflows/release.yml  a `v*` tag: build, sign, GitHub release, catalog pull request
 ```
 
 ## API
@@ -70,4 +73,6 @@ bun run dev                      # bun --hot src/index.ts, reads .env (never on 
 
 ## Installation package
 
-`bun run pack [-- --out DIR]` builds `<name>-<version>.spaceapp` (ai-space docs/app-packages.md) from this tree without changing it; `scripts/pack.ts` explains how. `space.yaml` stays spec 1 for the git deployment; the package's spec-2 manifest is made from it, with `version` from `package.json` and the files, launch mode and offline notes from `spacePackage` there. A package runs on a port ai-space assigns: nothing may assume the manifest's port (the package's entry writes the assigned one to `<data dir>/service.port`). Machine settings of a package install go in `<workspace>/data/<app>/.env`. Bump `version` for each package released; install with `space app install`, upgrade with `space app upgrade`. A machine is served by the git deployment or by a package, never both.
+The app ships through the ai-space app catalog as a signed package (ai-space docs/app-catalog.md). `space.release.yaml` is its spec-2 declaration: `space.yaml` stays spec 1 for the git deployment, and the components of the two must be the same (`src/release.test.ts`). Its `build:` section says how a checkout becomes the package: `bun install --frozen-lockfile`, then `bun run build` bundles `src/index.ts` and the page into `dist/` (`dist/index.js` is the launch entry; the bundle serves its hashed pictures itself), and the package carries `dist` and `icon.png`; the source package adds the source.
+
+`bun run pack [-- --out DIR] [--sign-key FILE]` runs ai-space's `space app release` on this tree and writes `task-shelf-<version>.spaceapp` and `task-shelf-<version>-source.spaceapp`; the tree itself is never changed. To release: raise `version` in `space.release.yaml` and `package.json` together, commit, and push the tag `v<version>`: `.github/workflows/release.yml` builds, signs with the `SPACE_SIGN_KEY` secret, attaches both packages to the GitHub release and, with `CATALOG_TOKEN`, proposes the catalog entry. A package runs on a port ai-space assigns; machine settings of a package install go in `<workspace>/data/task-shelf/.env`. Install with `space app install task-shelf` (`--source` to build it from this repository), upgrade with `space app upgrade task-shelf`. A machine is served by the git deployment or by a package, never both.

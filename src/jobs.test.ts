@@ -172,3 +172,20 @@ describe("overview", () => {
     expect(rows[0]).toMatchObject({ owner: "mine", registered: false, taskId: null, syncError: "not registered in ai-space" });
   });
 });
+
+describe("agent runtime", () => {
+  test("an agent job without a model runs on the runtime the Space's default follows", async () => {
+    const db = openDatabase(":memory:");
+    const space = fakeSpace({ now: () => NOW });
+    let runtime = "codex";
+    const shelf = new Shelf({ db, space, app: "task-shelf", dataDir: mkdtempSync(join(tmpdir(), "task-shelf-")), agentRuntime: () => runtime, now: () => NOW });
+    await shelf.create({ name: "digest", kind: "agent", prompt: "Summarise the day", schedule: { kind: "cron", expr: "0 8 * * *" } }, "page", ZONE);
+    expect(space.tasks[0]?.target).toMatchObject({ kind: "agent", runtime: "codex" });
+    runtime = "claude";
+    await shelf.create({ name: "digest-2", kind: "agent", prompt: "Again", schedule: { kind: "cron", expr: "0 9 * * *" } }, "page", ZONE);
+    expect(space.tasks[1]?.target).toMatchObject({ kind: "agent", runtime: "claude" });
+    // A job that names its model keeps it.
+    await shelf.create({ name: "digest-3", kind: "agent", prompt: "Mine", model: "deepseek/junior", schedule: { kind: "cron", expr: "0 10 * * *" } }, "page", ZONE);
+    expect(space.tasks[2]?.target).toMatchObject({ runtime: "deepseek", model: "junior" });
+  });
+});
