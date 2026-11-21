@@ -83,6 +83,8 @@ export interface SpaceApi {
   deleteTask(id: string): Promise<void>;
   /** started false: the task is already running (ai-space answers 409). */
   runTask(id: string): Promise<{ started: boolean }>;
+  /** The Space's default model for apps (`runtime/tier`), when it can be read. */
+  defaultModel?(): Promise<string | undefined>;
 }
 
 /** An error ai-space answered with, or could not be reached for. */
@@ -124,6 +126,8 @@ export function httpSpace(opts: { apiUrl: string; appToken: string; operatorToke
       const r = await call<{ started?: boolean }>("POST", `/api/tasks/${encodeURIComponent(id)}/run`, write(), undefined, [409]);
       return { started: r.status !== 409 && r.data.started !== false };
     },
+    // The panel's setting; reading it is an owner route, so it takes the operator credential.
+    defaultModel: async () => (opts.operatorToken ? (await call<{ appDefault?: string }>("GET", "/api/model/preferences", opts.operatorToken)).data.appDefault : undefined),
   };
 }
 

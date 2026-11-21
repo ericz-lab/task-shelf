@@ -1,0 +1,59 @@
+# The installation package's declaration (ai-space docs/app-packages.md, docs/app-catalog.md).
+# space.yaml stays spec 1 for the git deployment; the components here (everything but spec,
+# version, requires, offline, launch and build) must equal its own: src/release.test.ts checks.
+# Release: raise `version` (and package.json's), then tag v<version>; .github/workflows/release.yml
+# builds, signs and publishes. `bun run pack` builds the same packages locally.
+
+spec: 2
+name: task-shelf
+version: 0.2.0
+title: Task Shelf
+description: A home for small scheduled jobs that have no app of their own. You add, edit, pause, resume and run your jobs by hand or by asking the AI assistant; ai-space's scheduler runs them.
+icon: icon.png
+status: active
+repo: https://github.com/ericz-lab/task-shelf.git
+i18n:
+  zh:
+    title: 定时任务收纳
+    description: 收纳没有自己界面的零散定时任务。只列出在这里新建的任务，可以新建、修改、暂停、恢复、立即运行，可以手动，也可以交给 AI 助手；运行由 ai-space 的调度器负责。
+
+requires:
+  spaceApi: 1
+  bun: 1.3.0
+
+offline:
+  features:
+    - List, create, edit, pause, resume and run this machine's jobs
+  online:
+    - The AI assistant
+    - Jobs on other machines
+
+# The bundle `bun run build` makes; ai-space hands over PORT and stops it when idle.
+launch:
+  kind: process
+  runtime: bun
+  entry: dist/index.js
+  mode: on-demand
+  idleTimeoutMs: 300000
+  health: /healthz
+
+# How a checkout becomes the package: in a scratch copy, never in this tree.
+build:
+  install: bun install --frozen-lockfile
+  run: bun run build
+  include: [dist, icon.png]
+
+model:
+  default: junior
+  tags:
+    assistant: junior
+
+provides:
+  ops:
+    description: A request for one of Task Shelf's own page routes on this machine (list, runs, a run's conversation, create, change, pause, resume, run, archive, restore, assistant), from Task Shelf on another space.
+    http: { method: POST, path: /api/remote }
+    timeout: 3m
+
+storage:
+  database: sqlite
+  blobs: none

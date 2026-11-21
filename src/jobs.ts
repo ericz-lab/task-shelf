@@ -56,7 +56,8 @@ export interface ShelfOptions {
   app: string;
   /** Where agent jobs' prompt files are written (`SPACE_APP_DATA_DIR`). */
   dataDir: string;
-  agentRuntime: string;
+  /** The runtime of an agent job that names no model; a function to follow a setting that changes. */
+  agentRuntime: string | (() => string);
   now?: () => number;
 }
 
@@ -69,7 +70,7 @@ export class Shelf {
   readonly space: SpaceApi;
   readonly app: string;
   private readonly dataDir: string;
-  private readonly agentRuntime: string;
+  private readonly agentRuntime: string | (() => string);
   private readonly now: () => number;
 
   constructor(o: ShelfOptions) {
@@ -155,7 +156,7 @@ export class Shelf {
         return { kind: "http", method: f.httpMethod!, url: f.httpUrl!, ...(body !== undefined ? { body } : {}) };
       }
       case "agent": {
-        const [runtime, model] = f.agentModel ? [f.agentModel.slice(0, f.agentModel.indexOf("/")), f.agentModel.slice(f.agentModel.indexOf("/") + 1)] : [this.agentRuntime, undefined];
+        const [runtime, model] = f.agentModel ? [f.agentModel.slice(0, f.agentModel.indexOf("/")), f.agentModel.slice(f.agentModel.indexOf("/") + 1)] : [typeof this.agentRuntime === "function" ? this.agentRuntime() : this.agentRuntime, undefined];
         return { kind: "agent", runtime, prompt: this.promptPath(f.name), cwd: this.dataDir, ...(model ? { model } : {}) };
       }
     }
