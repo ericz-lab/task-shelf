@@ -23,6 +23,12 @@ describe("routes", () => {
     expect(await (await fetch(`${base}/api/meta`)).json()).toMatchObject({ ok: true, app: "task-shelf", machine: "box", writable: true, assistant: false });
   });
 
+  test("the icon is served from beside the source on every platform", async () => {
+    const r = await fetch(`${base}/icon.png`);
+    expect(r.status).toBe(200);
+    expect((await r.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  });
+
   test("create a job, see it in the overview, pause and run it", async () => {
     const res = await post("/api/jobs", { name: "nightly", kind: "command", command: "echo hi", schedule: { kind: "cron", expr: "0 3 * * *" }, zone: "Asia/Shanghai" });
     expect(res.status).toBe(201);
