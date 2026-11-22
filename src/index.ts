@@ -125,7 +125,7 @@ export function createServer(opts: ServerOptions) {
     routes: {
       "/": opts.web === false ? () => new Response("no page", { status: 404 }) : index,
       "/healthz": () => json({ ok: true }),
-      "/icon.png": () => new Response(Bun.file(new URL("../icon.png", import.meta.url).pathname), { headers: { "content-type": "image/png", "cache-control": "max-age=3600" } }),
+      "/icon.png": () => new Response(Bun.file(Bun.fileURLToPath(new URL("../icon.png", import.meta.url))), { headers: { "content-type": "image/png", "cache-control": "max-age=3600" } }),
 
       // The machines this page shows: this one first, then the peers running this app.
       "/api/machines": async () => json({ ok: true, ...(await machines()) }),
@@ -239,7 +239,7 @@ export function createServer(opts: ServerOptions) {
       // A bundled release (`bun run build`) serves its hashed pictures from beside the bundle; from source they are routes of the page.
       const path = new URL(req.url).pathname;
       if (/^\/[A-Za-z0-9_-]+-[a-z0-9]{8}\.(png|svg|webp|ico|jpg)$/.test(path)) {
-        const file = Bun.file(new URL(`.${path}`, import.meta.url).pathname);
+        const file = Bun.file(Bun.fileURLToPath(new URL(`.${path}`, import.meta.url)));
         return file.exists().then((ok) => (ok ? new Response(file, { headers: { "cache-control": "max-age=31536000, immutable" } }) : fail("not-found", "not found", 404)));
       }
       return fail("not-found", "not found", 404);
